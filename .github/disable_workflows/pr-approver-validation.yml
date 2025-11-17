@@ -92,7 +92,7 @@ jobs:
           echo "✅ Todas las variables están presentes."
 
       - name: Ejecutar CLI de validación de aprobadores de PR
-        uses: binaural-dev/.github-workflows/.github/actions/install_bincli@release
+        uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@release
         if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_PR_APPROVER_VALIDATION == '1' && vars.ENABLE_REPO_CICD_PR_APPROVER_VALIDATION == '1' }}
         env:
           ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
