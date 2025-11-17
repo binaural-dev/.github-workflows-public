@@ -92,7 +92,7 @@ jobs:
 
       - name: Ejecutar CLI desde mount-cicd-tool
         if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' &&  vars.ENABLE_ORG_CICD_CHECK_PR_TESTS == '1' && vars.ENABLE_REPO_CICD_CHECK_PR_TESTS == '1' }}
-        uses: binaural-dev/.github-workflows/.github/actions/mount-cicd-tool@release
+        uses: binaural-dev/.github-workflows-public/.github/actions/mount-cicd-tool@release
         env:
           ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           S3_ACCESS_KEY: ${{ secrets.ORG_S3_ACCESS_KEY }}

@@ -4,7 +4,7 @@ set -e  # Salir si ocurre cualquier error
 
 HOST_REPO_DIR="$(pwd)"
 
-REPO_URL="git@github.com:binaural-dev/.github-workflows-old.git"
+REPO_URL="git@github.com:binaural-dev/.github-workflows-public-old.git"
 TARGET_DIR=".github"
 HASH_FILE="$HOST_REPO_DIR/gw_hash.txt"
 BRANCH="rls_feat-ta_56178_check_test_from_pull_requests"
