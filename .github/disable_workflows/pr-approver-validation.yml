@@ -1,0 +1,112 @@
+# .github/workflows/pr-approver-validation.yml
+
+# Secrets and variables required:
+# - secrets:
+#   - ORG_CICD_TOKEN
+#   - ORG_S3_ACCESS_KEY
+#   - ORG_S3_SECRET_KEY
+#   - ORG_S3_BUCKET_NAME
+#   - ORG_S3_ENDPOINT_URL
+#   - ORG_S3_REGION_NAME
+# - variables:
+#   - ENABLE_ORG_CICD_PR_APPROVER_VALIDATION
+#   - ENABLE_REPO_CICD_PR_APPROVER_VALIDATION
+#   - ORG_CICD_PR_APPROVER_VALIDATION_TARGET_BRANCHES
+#   - REPO_CICD_PR_APPROVER_VALIDATION_TARGET_BRANCHES
+#   - ORG_CICD_PR_APPROVER_TEAM_NAME
+
+name: Pull Request Approver Validation
+
+on:
+  pull_request:
+    types: [opened, reopened]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  run-cli-command:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Action Deshabilitada por configuración
+        if: ${{ vars.ENABLE_ORG_CICD_PR_APPROVER_VALIDATION != '1' || vars.ENABLE_REPO_CICD_PR_APPROVER_VALIDATION != '1' }}
+        run: |
+          echo "⚠️ Las configuraciones de activación no están habilitadas:"
+          echo "ENABLE_ORG_CICD_PR_APPROVER_VALIDATION=${{ vars.ENABLE_ORG_CICD_PR_APPROVER_VALIDATION }}"
+          echo "ENABLE_REPO_CICD_PR_APPROVER_VALIDATION=${{ vars.ENABLE_REPO_CICD_PR_APPROVER_VALIDATION }}"
+          echo "Saliendo sin ejecutar action."
+          exit 0
+      - name: Validar configuración requerida
+        id: check_required_settings
+        if: ${{ vars.ENABLE_ORG_CICD_PR_APPROVER_VALIDATION == '1' && vars.ENABLE_REPO_CICD_PR_APPROVER_VALIDATION == '1' }}
+        run: |
+          echo "🔍 Validando rama destino: ${{ github.event.pull_request.base.ref }}"
+
+          ALLOWED_BRANCHES="${{ vars.ORG_CICD_PR_APPROVER_VALIDATION_TARGET_BRANCHES }},${{ vars.REPO_CICD_PR_APPROVER_VALIDATION_TARGET_BRANCHES }},"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          HABILITADO=0
+          IFS=',' read -ra ALLOWED <<< "$ALLOWED_BRANCHES"
+          for branch in "${ALLOWED[@]}"; do
+            if [[ "$branch" == "$BASE_REF" ]]; then
+              HABILITADO=1
+            fi
+          done
+          echo "allow_run_next_steps=$HABILITADO" >> $GITHUB_OUTPUT
+
+          if [[ $HABILITADO -eq 0 ]]; then
+            echo "⚠️ La rama '$BASE_REF' no está permitida para este workflow."
+            echo "Saliendo sin ejecutar tests."
+            exit 0
+          else
+            echo "✅ Rama permitida: $BASE_REF"
+          fi
+
+          # -----------------------------------
+
+          echo "🔍 Validando configuración..."
+
+          echo "🔧 Variables de configuración:"
+          cat <<EOF
+          Secrets and variables required:
+            - secrets:
+              - ORG_CICD_TOKEN
+            - variables:
+              - ENABLE_ORG_CICD_PR_APPROVER_VALIDATION
+              - ENABLE_REPO_CICD_PR_APPROVER_VALIDATION
+              - ORG_CICD_PR_APPROVER_VALIDATION_TARGET_BRANCHES
+              - ORG_CICD_PR_APPROVER_TEAM_NAME
+          EOF
+
+
+          [[ -z "${{ vars.ORG_CICD_PR_APPROVER_VALIDATION_TARGET_BRANCHES }}" ]] && echo "❌ Falta ORG_CICD_PR_APPROVER_VALIDATION_TARGET_BRANCHES" && exit 1
+          [[ -z "${{ vars.ORG_CICD_PR_APPROVER_TEAM_NAME }}" ]] && echo "❌ Falta ORG_CICD_PR_APPROVER_TEAM_NAME" && exit 1
+          [[ -z "${{ secrets.ORG_CICD_TOKEN }}" ]] && echo "❌ Falta ORG_CICD_TOKEN" && exit 1
+
+          # S3
+          [[ -z "${{ secrets.ORG_S3_ACCESS_KEY }}" ]] && echo "❌ Falta ORG_S3_ACCESS_KEY" && exit 1
+          [[ -z "${{ secrets.ORG_S3_SECRET_KEY }}" ]] && echo "❌ Falta ORG_S3_SECRET_KEY" && exit 1
+          [[ -z "${{ secrets.ORG_S3_BUCKET_NAME }}" ]] && echo "❌ Falta ORG_S3_BUCKET_NAME" && exit 1
+          [[ -z "${{ secrets.ORG_S3_ENDPOINT_URL }}" ]] && echo "❌ Falta ORG_S3_ENDPOINT_URL" && exit 1
+          [[ -z "${{ secrets.ORG_S3_REGION_NAME }}" ]] && echo "❌ Falta ORG_S3_REGION_NAME" && exit 1
+
+          echo "✅ Todas las variables están presentes."
+
+      - name: Ejecutar CLI de validación de aprobadores de PR
+        uses: binaural-dev/.github-workflows/.github/actions/install_bincli@release
+        if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_PR_APPROVER_VALIDATION == '1' && vars.ENABLE_REPO_CICD_PR_APPROVER_VALIDATION == '1' }}
+        env:
+          ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
+          S3_ACCESS_KEY: ${{ secrets.ORG_S3_ACCESS_KEY }}
+          S3_SECRET_KEY: ${{ secrets.ORG_S3_SECRET_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.ORG_S3_BUCKET_NAME }}
+          S3_ENDPOINT_URL: ${{ secrets.ORG_S3_ENDPOINT_URL }}
+          S3_REGION_NAME: ${{ secrets.ORG_S3_REGION_NAME }}
+        with:
+          BINCLI_BRANCH_OR_TAG: 'release'
+          CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
+          cli-command: |
+            chcli devops code-review check-pull-request-approvers \
+              -u https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \
+              -team ${{ vars.ORG_CICD_PR_APPROVER_TEAM_NAME }} \
+              --run_name '"Id: ${{ github.run_id }}"' \
+              --github_event_name ${{ github.event_name }}

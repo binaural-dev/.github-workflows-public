@@ -1,0 +1,201 @@
+# .github/actions/mount-cicd-tool/action.yml
+name: Mount CICD Tool and Run CLI (Local Action)
+description: Ejecuta validaciones y corre el CLI de revisión de PR
+inputs:
+  # if-script:
+  #   required: true
+  #   description: Script de validación previa
+  cli-command:
+    required: true
+    description: Comando CLI a ejecutar
+  CICD_TOKEN:
+    required: true
+    description: Token de acceso para el repositorio
+runs:
+  using: "composite"
+    # En el action que llama a este workflow ya se hizo el checkout del código del PR. Este siempre debe hacerse antes de llamar a este workflow.
+    # - name: Clone repository (Shallow clone) code of pull request
+    #   uses: actions/checkout@v4
+    #   with:
+    #     fetch-depth: 1  # Clonar todo el historial para poder acceder a todos los commits
+    #     path: host_repository  # Clonar en un subdirectorio llamado 'host_repository'
+  steps:
+    - name: Preparar entorno
+      shell: bash
+      run: |
+        echo "🔍 Verifying Docker installation..."
+        docker --version
+        docker compose version || docker-compose --version
+
+        echo "🔍 Checking Python installation..."
+        if ! command -v python3 &> /dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+        fi
+        python3 --version
+        pip3 --version
+
+    # - name: Clone repository (Shallow clone) code of pull request
+    #   if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_CHECK_PR_TESTS == '1' && vars.ENABLE_REPO_CICD_CHECK_PR_TESTS == '1' }}
+    #   uses: actions/checkout@v4
+    #   with:
+    #     fetch-depth: 1  # Clonar todo el historial para poder acceder a todos los commits
+    #     path: action_repository # Clonar en un subdirectorio llamado 'action_repository'
+
+    - name: Clonar y preparar CICD Tool
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.CICD_TOKEN }}
+      run: |
+        echo "📦 Cloning CICD tool repository..."
+
+        ls -la "${{ github.action_path }}"
+
+        GFLOW_RESOURCES_PATH="${{ github.action_path }}/resources"
+
+        DOCKER_ODOO_CICD_HASH_FILE="$GFLOW_RESOURCES_PATH/docker-odoo-cicd_hash.txt"
+        DOCKER_ODOO_CICD_REPO="https://x-access-token:$TOKEN@github.com/binaural-dev/docker-odoo-cicd.git"
+        DOCKER_ODOO_CICD_DIR="cicd-tool"
+        DEFAULT_BRANCH="release"
+
+        echo "🔧 Rewriting SSH URLs to HTTPS..."
+        git config --global url."https://x-access-token:$TOKEN@github.com/".insteadOf git@github.com:
+
+        echo "🔍 Cloning repository..."
+        git clone --branch "$DEFAULT_BRANCH" "$DOCKER_ODOO_CICD_REPO" "$DOCKER_ODOO_CICD_DIR"
+        
+        echo "🔍 Navigating to cicd-tool directory..."
+
+        cd "$DOCKER_ODOO_CICD_DIR" || exit 1
+
+        #---------- Utilizando hash obtenido en $GFLOW_RESOURCES_PATH/docker-odoo-cicd_hash.txt y navegando a él ----------#
+
+        echo "GFLOW_RESOURCES_PATH: $GFLOW_RESOURCES_PATH"
+        echo "🔍 Read hash: '$DOCKER_ODOO_CICD_HASH'"
+        ls -la "$GFLOW_RESOURCES_PATH"
+
+        if [ -s "$DOCKER_ODOO_CICD_HASH_FILE" ]; then
+          echo "🔍 Reading commit hash from $DOCKER_ODOO_CICD_HASH_FILE..."
+          DOCKER_ODOO_CICD_HASH=$(cat "$DOCKER_ODOO_CICD_HASH_FILE" | tr -d '[:space:]')
+          
+          echo "🔍 Validating commit hash..."
+          if [ -z "$DOCKER_ODOO_CICD_HASH" ]; then
+            echo "❌ El archivo $DOCKER_ODOO_CICD_HASH_FILE está vacío o no contiene un hash válido."
+          else
+            echo "✅ Commit hash to checkout: $DOCKER_ODOO_CICD_HASH"
+            git checkout "$DOCKER_ODOO_CICD_HASH"
+          fi
+        fi
+
+        #---------- / ----------#
+
+        echo ""
+        echo ""
+        echo "📦 Initializing all submodules recursively..."
+
+        git submodule update --init --recursive
+
+        echo ""
+
+    - name: Instalar CLI Tool
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.CICD_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.CICD_TOKEN }}
+      run: |
+        echo "⚙️ Installing CLI tool..."
+        TOOL_DIR="cicd-tool/_bincli_fork"
+
+        cd "$TOOL_DIR" || exit 1
+
+        if [ ! -f ".example_env" ]; then
+          echo "❌ .example_env file not found."
+          exit 1
+        fi
+
+        # set -a && source .example_env && set +a
+
+        # export GITHUB_TOKEN=${{ inputs.CICD_TOKEN }}
+
+        # echo "📄 Environment variables loaded:"
+        # env > .env
+
+        # -----------------------------------
+
+        echo "🔄 Generando .env desde .example_env y variables del entorno..."
+
+        # Archivo de entrada y salida
+        EXAMPLE_FILE=".example_env"
+        OUTPUT_FILE=".env"
+
+        # Limpiar archivo de salida
+        > "$OUTPUT_FILE"
+
+        # Procesar cada línea del archivo de ejemplo
+        while IFS= read -r line; do
+          # Ignorar líneas vacías o comentarios
+          if [[ -z "$line" || "$line" =~ ^# ]]; then
+            echo "$line" >> "$OUTPUT_FILE"
+            continue
+          fi
+
+          # Extraer nombre de variable
+          var_name=$(echo "$line" | cut -d '=' -f 1)
+
+          # Obtener valor del entorno si existe, si no usar el del archivo
+          env_value="${!var_name}"
+          if [[ -n "$env_value" ]]; then
+            echo "$var_name=\"$env_value\"" >> "$OUTPUT_FILE"
+          else
+            echo "$line" >> "$OUTPUT_FILE"
+          fi
+        done < "$EXAMPLE_FILE"
+
+        echo "✅ Archivo .env generado con valores actualizados."
+
+        # -----------------------------------
+
+        ls -la
+        pwd
+
+        set -a && source .env && set +a
+
+        if [ ! -f "install.sh" ]; then
+          echo "❌ install.sh not found."
+          exit 1
+        fi
+
+        echo "🚀 Running install.sh..."
+        chmod +x install.sh
+        ./install.sh
+
+    - name: Ejecutar validaciones y CLI
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.CICD_TOKEN }}
+        MODULES_PATH: modules
+        ENABLE_COMMAND_SERVER: 0
+        COMMAND_SERVER_HOST: localhost
+        COMMAND_SERVER_PORT: 5000
+        COMMAND_SERVER_DEBUG: 0
+        COMMAND_SERVER_API_KEY: mi_api_key_super_secreta
+        COMMAND_API_KEY_CREATION_DATE: 2025-03-15 # "%Y-%m-%d"
+        COMMAND_API_KEY_EXPIRATION_DAYS: 30 # from creation date plus this day into the future de api key will be expired. Change api key and update creation date
+        COMMAND_SERVER_ALLOWED_IP: 127.0.0.1
+      run: |
+        # echo "🚀 Checking validations before running CLI command..."
+        
+        # echo "${{ inputs.if-script }}" > /tmp/mount_cicd_tool_script__if-script.sh
+
+        # cat /tmp/mount_cicd_tool_script__if-script.sh
+
+        # bash /tmp/mount_cicd_tool_script__if-script.sh
+        
+
+        echo "🚀 Running CLI command..."
+
+        echo "${{ inputs.cli-command }}" > /tmp/mount_cicd_tool_script__cli-command.sh
+
+        cat /tmp/mount_cicd_tool_script__cli-command.sh
+
+        bash /tmp/mount_cicd_tool_script__cli-command.sh

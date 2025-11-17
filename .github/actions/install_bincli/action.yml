@@ -1,0 +1,162 @@
+# .github/actions/mount-cicd-tool/action.yml
+name: Install and run BINCLI
+description: Instala BINCLI y ejecuta un comando CLI especificado
+inputs:
+  cli-command:
+    required: true
+    description: Comando CLI a ejecutar
+  CICD_TOKEN:
+    required: true
+    description: Token de acceso para el repositorio
+  BINCLI_BRANCH_OR_TAG:
+    required: true
+    description: Rama o tag específico de BINCLI a usar (por defecto se usa 'release'
+runs:
+  using: "composite"
+  steps:
+    - name: Preparar entorno
+      shell: bash
+      run: |
+        echo "🔍 Verifying Docker installation..."
+        docker --version
+        docker compose version || docker-compose --version
+
+        echo "🔍 Checking Python installation..."
+        if ! command -v python3 &> /dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+        fi
+        python3 --version
+        pip3 --version
+
+    - name: Clonar bincli repository
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.CICD_TOKEN }}
+        BINCLI_BRANCH_OR_TAG: ${{ inputs.BINCLI_BRANCH_OR_TAG }}
+      run: |
+        echo "📦 Cloning BINCLI repository..."
+
+        ls -la "${{ github.action_path }}"
+
+        GFLOW_RESOURCES_PATH="${{ github.action_path }}/resources"
+
+        BINCLI_REPO_URL="https://x-access-token:$TOKEN@github.com/binaural-dev/_bincli_fork.git"
+        BINCLI_REPO_DIR="bincli"
+
+        BINCLI_BRANCH_OR_TAG="${{ inputs.BINCLI_BRANCH_OR_TAG }}"
+
+        echo "🔧 Rewriting SSH URLs to HTTPS..."
+        git config --global url."https://x-access-token:$TOKEN@github.com/".insteadOf git@github.com:
+
+        echo "🔍 Cloning repository..."
+        git clone --depth 1 --branch "$BINCLI_BRANCH_OR_TAG" "$BINCLI_REPO_URL" "$BINCLI_REPO_DIR"
+
+        echo "📦 Listing cloned directory contents..."
+        ls -la
+        echo ""
+        
+        echo "🔍 Navigating to bincli directory..."
+
+        cd "$BINCLI_REPO_DIR" || exit 1
+
+        ls -la
+
+        echo ""
+
+
+    - name: Instalar BINCLI
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.CICD_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.CICD_TOKEN }}
+      run: |
+        echo "⚙️ Installing BINCLI..."
+        BINCLI_REPO_DIR="bincli"
+
+        echo "🔍 Navigating to tool directory: $BINCLI_REPO_DIR"
+        cd "$BINCLI_REPO_DIR" || exit 1
+        echo ""
+
+        echo "📦 Listing tool directory contents..."
+        ls -la
+        pwd
+        echo ""
+
+        # -----------------------------------
+        echo "🔍 Checking for .example_env file..."
+
+        # Archivo de entrada y salida
+        EXAMPLE_FILE=".example_env"
+        OUTPUT_FILE=".env"
+
+        if [ ! -f "$EXAMPLE_FILE" ]; then
+          echo "❌ $EXAMPLE_FILE file not found."
+          exit 1
+        fi
+
+        echo "🔄 Generando .env desde $EXAMPLE_FILE y variables del entorno..."
+
+        # Limpiar archivo de salida
+        > "$OUTPUT_FILE"
+
+        # Procesar cada línea del archivo de ejemplo
+        while IFS= read -r line; do
+          # Ignorar líneas vacías o comentarios
+          if [[ -z "$line" || "$line" =~ ^# ]]; then
+            echo "$line" >> "$OUTPUT_FILE"
+            continue
+          fi
+
+          # Extraer nombre de variable
+          var_name=$(echo "$line" | cut -d '=' -f 1)
+
+          # Obtener valor del entorno si existe, si no usar el del archivo
+          env_value="${!var_name}"
+          if [[ -n "$env_value" ]]; then
+            echo "$var_name=\"$env_value\"" >> "$OUTPUT_FILE"
+          else
+            echo "$line" >> "$OUTPUT_FILE"
+          fi
+        done < "$EXAMPLE_FILE"
+
+        echo "✅ Archivo .env generado con valores actualizados."
+
+        # -----------------------------------
+
+        ls -la
+        pwd
+
+        set -a && source .env && set +a
+
+        if [ ! -f "install.sh" ]; then
+          echo "❌ install.sh not found."
+          exit 1
+        fi
+
+        echo "🚀 Running install.sh..."
+        chmod +x install.sh
+        ./install.sh
+
+    - name: Run BINCLI command
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.CICD_TOKEN }}
+        MODULES_PATH: modules
+        ENABLE_COMMAND_SERVER: 0
+        COMMAND_SERVER_HOST: localhost
+        COMMAND_SERVER_PORT: 5000
+        COMMAND_SERVER_DEBUG: 0
+        COMMAND_SERVER_API_KEY: mi_api_key_super_secreta
+        COMMAND_API_KEY_CREATION_DATE: 2025-03-15 # "%Y-%m-%d"
+        COMMAND_API_KEY_EXPIRATION_DAYS: 30 # from creation date plus this day into the future de api key will be expired. Change api key and update creation date
+        COMMAND_SERVER_ALLOWED_IP: 127.0.0.1
+      run: |
+
+        echo "🚀 Running CLI command..."
+
+        echo "${{ inputs.cli-command }}" > /tmp/bincli_script__cli-command.sh
+
+        cat /tmp/bincli_script__cli-command.sh
+
+        bash /tmp/bincli_script__cli-command.sh
