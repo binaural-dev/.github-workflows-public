@@ -100,9 +100,9 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.ORG_S3_BUCKET_NAME }}
           S3_ENDPOINT_URL: ${{ secrets.ORG_S3_ENDPOINT_URL }}
           S3_REGION_NAME: ${{ secrets.ORG_S3_REGION_NAME }}
-          ORG_DOCKER_REGISTRY_URL: ${{ secrets.ORG_DOCKER_REGISTRY_URL }}
-          ORG_DOCKER_REGISTRY_USERNAME: ${{ secrets.ORG_DOCKER_REGISTRY_USERNAME }}
-          ORG_DOCKER_REGISTRY_PASSWORD: ${{ secrets.ORG_DOCKER_REGISTRY_PASSWORD }}
+          DOCKER_REGISTRY_URL: ${{ secrets.ORG_DOCKER_REGISTRY_URL }}
+          DOCKER_REGISTRY_USERNAME: ${{ secrets.ORG_DOCKER_REGISTRY_USERNAME }}
+          DOCKER_REGISTRY_PASSWORD: ${{ secrets.ORG_DOCKER_REGISTRY_PASSWORD }}
         with:
           CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           cli-command: |
