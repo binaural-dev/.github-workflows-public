@@ -8,6 +8,9 @@
 #   - ORG_S3_BUCKET_NAME
 #   - ORG_S3_ENDPOINT_URL
 #   - ORG_S3_REGION_NAME
+#   - ORG_DOCKER_REGISTRY_URL
+#   - ORG_DOCKER_REGISTRY_USERNAME
+#   - ORG_DOCKER_REGISTRY_PASSWORD
 # - variables:
 #   - ENABLE_ORG_CICD_CHECK_PR_TESTS
 #   - ENABLE_REPO_CICD_CHECK_PR_TESTS
@@ -70,6 +73,14 @@ jobs:
           Secrets and variables required:
             - secrets:
               - ORG_CICD_TOKEN
+              - ORG_S3_ACCESS_KEY
+              - ORG_S3_SECRET_KEY
+              - ORG_S3_BUCKET_NAME
+              - ORG_S3_ENDPOINT_URL
+              - ORG_S3_REGION_NAME
+              - ORG_DOCKER_REGISTRY_URL
+              - ORG_DOCKER_REGISTRY_USERNAME
+              - ORG_DOCKER_REGISTRY_PASSWORD
             - variables:
               - ENABLE_ORG_CICD_CHECK_PR_TESTS
               - ENABLE_REPO_CICD_CHECK_PR_TESTS
@@ -87,6 +98,11 @@ jobs:
           [[ -z "${{ secrets.ORG_S3_BUCKET_NAME }}" ]] && echo "❌ Falta ORG_S3_BUCKET_NAME" && exit 1
           [[ -z "${{ secrets.ORG_S3_ENDPOINT_URL }}" ]] && echo "❌ Falta ORG_S3_ENDPOINT_URL" && exit 1
           [[ -z "${{ secrets.ORG_S3_REGION_NAME }}" ]] && echo "❌ Falta ORG_S3_REGION_NAME" && exit 1
+
+          # Docker Registry
+          [[ -z "${{ secrets.ORG_DOCKER_REGISTRY_URL }}" ]] && echo "❌ Falta ORG_DOCKER_REGISTRY_URL" && exit 1
+          [[ -z "${{ secrets.ORG_DOCKER_REGISTRY_USERNAME }}" ]] && echo "❌ Falta ORG_DOCKER_REGISTRY_USERNAME" && exit 1
+          [[ -z "${{ secrets.ORG_DOCKER_REGISTRY_PASSWORD }}" ]] && echo "❌ Falta ORG_DOCKER_REGISTRY_PASSWORD" && exit 1
 
           echo "✅ Todas las variables están presentes."
 
