@@ -8,6 +8,13 @@
 #   - ORG_S3_BUCKET_NAME
 #   - ORG_S3_ENDPOINT_URL
 #   - ORG_S3_REGION_NAME
+#   - ORG_DOCKER_REGISTRY_URL
+#   - ORG_DOCKER_REGISTRY_USERNAME
+#   - ORG_DOCKER_REGISTRY_PASSWORD
+#   - ORG_ODOOHOST_BASE_URL
+#   - ORG_ODOOHOST_EMAIL
+#   - ORG_ODOOHOST_PASSWORD
+#   - ORG_SEND_REPORT_COVERAGE_TO_ODOOHOST (optional, default: "0")
 # - variables:
 #   - ENABLE_ORG_CICD_CHECK_PR_TESTS
 #   - ENABLE_REPO_CICD_CHECK_PR_TESTS
@@ -70,6 +77,17 @@ jobs:
           Secrets and variables required:
             - secrets:
               - ORG_CICD_TOKEN
+              - ORG_S3_ACCESS_KEY
+              - ORG_S3_SECRET_KEY
+              - ORG_S3_BUCKET_NAME
+              - ORG_S3_ENDPOINT_URL
+              - ORG_S3_REGION_NAME
+              - ORG_DOCKER_REGISTRY_URL
+              - ORG_DOCKER_REGISTRY_USERNAME
+              - ORG_DOCKER_REGISTRY_PASSWORD
+              - ORG_ODOOHOST_BASE_URL
+              - ORG_ODOOHOST_EMAIL
+              - ORG_ODOOHOST_PASSWORD
             - variables:
               - ENABLE_ORG_CICD_CHECK_PR_TESTS
               - ENABLE_REPO_CICD_CHECK_PR_TESTS
@@ -88,6 +106,16 @@ jobs:
           [[ -z "${{ secrets.ORG_S3_ENDPOINT_URL }}" ]] && echo "❌ Falta ORG_S3_ENDPOINT_URL" && exit 1
           [[ -z "${{ secrets.ORG_S3_REGION_NAME }}" ]] && echo "❌ Falta ORG_S3_REGION_NAME" && exit 1
 
+          # Docker Registry
+          [[ -z "${{ secrets.ORG_DOCKER_REGISTRY_URL }}" ]] && echo "❌ Falta ORG_DOCKER_REGISTRY_URL" && exit 1
+          [[ -z "${{ secrets.ORG_DOCKER_REGISTRY_USERNAME }}" ]] && echo "❌ Falta ORG_DOCKER_REGISTRY_USERNAME" && exit 1
+          [[ -z "${{ secrets.ORG_DOCKER_REGISTRY_PASSWORD }}" ]] && echo "❌ Falta ORG_DOCKER_REGISTRY_PASSWORD" && exit 1
+
+          # OdooHost
+          [[ -z "${{ secrets.ORG_ODOOHOST_BASE_URL }}" ]] && echo "❌ Falta ORG_ODOOHOST_BASE_URL" && exit 1
+          [[ -z "${{ secrets.ORG_ODOOHOST_EMAIL }}" ]] && echo "❌ Falta ORG_ODOOHOST_EMAIL" && exit 1
+          [[ -z "${{ secrets.ORG_ODOOHOST_PASSWORD }}" ]] && echo "❌ Falta ORG_ODOOHOST_PASSWORD" && exit 1
+
           echo "✅ Todas las variables están presentes."
 
       - name: Ejecutar CLI desde mount-cicd-tool
@@ -100,11 +128,22 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.ORG_S3_BUCKET_NAME }}
           S3_ENDPOINT_URL: ${{ secrets.ORG_S3_ENDPOINT_URL }}
           S3_REGION_NAME: ${{ secrets.ORG_S3_REGION_NAME }}
+          DOCKER_REGISTRY_URL: ${{ secrets.ORG_DOCKER_REGISTRY_URL }}
+          DOCKER_REGISTRY_USERNAME: ${{ secrets.ORG_DOCKER_REGISTRY_USERNAME }}
+          DOCKER_REGISTRY_PASSWORD: ${{ secrets.ORG_DOCKER_REGISTRY_PASSWORD }}
+          ODOOHOST_BASE_URL: ${{ secrets.ORG_ODOOHOST_BASE_URL }}
+          ODOOHOST_EMAIL: ${{ secrets.ORG_ODOOHOST_EMAIL }}
+          ODOOHOST_PASSWORD: ${{ secrets.ORG_ODOOHOST_PASSWORD }}
         with:
+          TOOL_BRANCH: "rls_feature-ta_62762_add_coverage_report_to_action"
           CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           cli-command: |
             chcli devops code-review run-tests-from-pull-request-by-branch-settings \
               --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \
               --run_name '"Id: ${{ github.run_id }}"' \
               --branch_name ${{ github.event.pull_request.base.ref }} \
+              --odoohost_base_url ${{ secrets.ORG_ODOOHOST_BASE_URL }} \
+              --odoohost_email ${{ secrets.ORG_ODOOHOST_EMAIL }} \
+              --odoohost_password ${{ secrets.ORG_ODOOHOST_PASSWORD }} \
+              --send_report_to_odoohost \
               --json-settings '${{ vars.REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS }}'
