@@ -11,6 +11,9 @@ inputs:
   CICD_TOKEN:
     required: true
     description: Token de acceso para el repositorio
+  TOOL_BRANCH:
+    required: true
+    description: Rama del repositorio de la herramienta CICD a utilizar (ej. main, release, etc.)
 runs:
   using: "composite"
     # En el action que llama a este workflow ya se hizo el checkout del código del PR. Este siempre debe hacerse antes de llamar a este workflow.
@@ -46,6 +49,7 @@ runs:
       shell: bash
       env:
         TOKEN: ${{ inputs.CICD_TOKEN }}
+        TOOL_BRANCH: ${{ inputs.TOOL_BRANCH }}
       run: |
         echo "📦 Cloning CICD tool repository..."
 
@@ -53,41 +57,18 @@ runs:
 
         GFLOW_RESOURCES_PATH="${{ github.action_path }}/resources"
 
-        DOCKER_ODOO_CICD_HASH_FILE="$GFLOW_RESOURCES_PATH/docker-odoo-cicd_hash.txt"
         DOCKER_ODOO_CICD_REPO="https://x-access-token:$TOKEN@github.com/binaural-dev/docker-odoo-cicd.git"
         DOCKER_ODOO_CICD_DIR="cicd-tool"
-        DEFAULT_BRANCH="release"
 
         echo "🔧 Rewriting SSH URLs to HTTPS..."
         git config --global url."https://x-access-token:$TOKEN@github.com/".insteadOf git@github.com:
 
         echo "🔍 Cloning repository..."
-        git clone --branch "$DEFAULT_BRANCH" "$DOCKER_ODOO_CICD_REPO" "$DOCKER_ODOO_CICD_DIR"
+        git clone --branch "$TOOL_BRANCH" "$DOCKER_ODOO_CICD_REPO" "$DOCKER_ODOO_CICD_DIR"
         
         echo "🔍 Navigating to cicd-tool directory..."
 
         cd "$DOCKER_ODOO_CICD_DIR" || exit 1
-
-        #---------- Utilizando hash obtenido en $GFLOW_RESOURCES_PATH/docker-odoo-cicd_hash.txt y navegando a él ----------#
-
-        echo "GFLOW_RESOURCES_PATH: $GFLOW_RESOURCES_PATH"
-        echo "🔍 Read hash: '$DOCKER_ODOO_CICD_HASH'"
-        ls -la "$GFLOW_RESOURCES_PATH"
-
-        if [ -s "$DOCKER_ODOO_CICD_HASH_FILE" ]; then
-          echo "🔍 Reading commit hash from $DOCKER_ODOO_CICD_HASH_FILE..."
-          DOCKER_ODOO_CICD_HASH=$(cat "$DOCKER_ODOO_CICD_HASH_FILE" | tr -d '[:space:]')
-          
-          echo "🔍 Validating commit hash..."
-          if [ -z "$DOCKER_ODOO_CICD_HASH" ]; then
-            echo "❌ El archivo $DOCKER_ODOO_CICD_HASH_FILE está vacío o no contiene un hash válido."
-          else
-            echo "✅ Commit hash to checkout: $DOCKER_ODOO_CICD_HASH"
-            git checkout "$DOCKER_ODOO_CICD_HASH"
-          fi
-        fi
-
-        #---------- / ----------#
 
         echo ""
         echo ""
