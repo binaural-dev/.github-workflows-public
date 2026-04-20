@@ -11,7 +11,7 @@
 #   - ORG_DOCKER_REGISTRY_URL
 #   - ORG_DOCKER_REGISTRY_USERNAME
 #   - ORG_DOCKER_REGISTRY_PASSWORD
-#   - ORG_ODOOHOST_BASE_URL
+#   
 #   - ORG_ODOOHOST_EMAIL
 #   - ORG_ODOOHOST_PASSWORD
 #   - ORG_SEND_REPORT_COVERAGE_TO_ODOOHOST (optional, default: "0")
@@ -20,6 +20,7 @@
 #   - ENABLE_REPO_CICD_CHECK_PR_TESTS
 #   - REPO_CICD_CHECK_PR_TARGET_BRANCHES
 #   - REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS
+#   - ORG_ODOOHOST_BASE_URL
 
 name: Check PR Tests
 
@@ -85,7 +86,6 @@ jobs:
               - ORG_DOCKER_REGISTRY_URL
               - ORG_DOCKER_REGISTRY_USERNAME
               - ORG_DOCKER_REGISTRY_PASSWORD
-              - ORG_ODOOHOST_BASE_URL
               - ORG_ODOOHOST_EMAIL
               - ORG_ODOOHOST_PASSWORD
             - variables:
@@ -93,8 +93,10 @@ jobs:
               - ENABLE_REPO_CICD_CHECK_PR_TESTS
               - REPO_CICD_CHECK_PR_TARGET_BRANCHES
               - REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS
+              - ORG_ODOOHOST_BASE_URL
           EOF
 
+          # 
           [[ -z "${{ vars.REPO_CICD_CHECK_PR_TARGET_BRANCHES }}" ]] && echo "❌ Falta REPO_CICD_CHECK_PR_TARGET_BRANCHES" && exit 1
           [[ -z "${{ vars.REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS }}" ]] && echo "❌ Falta REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS" && exit 1
           [[ -z "${{ secrets.ORG_CICD_TOKEN }}" ]] && echo "❌ Falta ORG_CICD_TOKEN" && exit 1
@@ -112,7 +114,7 @@ jobs:
           [[ -z "${{ secrets.ORG_DOCKER_REGISTRY_PASSWORD }}" ]] && echo "❌ Falta ORG_DOCKER_REGISTRY_PASSWORD" && exit 1
 
           # OdooHost
-          [[ -z "${{ secrets.ORG_ODOOHOST_BASE_URL }}" ]] && echo "❌ Falta ORG_ODOOHOST_BASE_URL" && exit 1
+          [[ -z "${{ vars.ORG_ODOOHOST_BASE_URL }}" ]] && echo "❌ Falta ORG_ODOOHOST_BASE_URL" && exit 1
           [[ -z "${{ secrets.ORG_ODOOHOST_EMAIL }}" ]] && echo "❌ Falta ORG_ODOOHOST_EMAIL" && exit 1
           [[ -z "${{ secrets.ORG_ODOOHOST_PASSWORD }}" ]] && echo "❌ Falta ORG_ODOOHOST_PASSWORD" && exit 1
 
@@ -131,7 +133,7 @@ jobs:
           DOCKER_REGISTRY_URL: ${{ secrets.ORG_DOCKER_REGISTRY_URL }}
           DOCKER_REGISTRY_USERNAME: ${{ secrets.ORG_DOCKER_REGISTRY_USERNAME }}
           DOCKER_REGISTRY_PASSWORD: ${{ secrets.ORG_DOCKER_REGISTRY_PASSWORD }}
-          ODOOHOST_BASE_URL: ${{ secrets.ORG_ODOOHOST_BASE_URL }}
+          ODOOHOST_BASE_URL: ${{ vars.ORG_ODOOHOST_BASE_URL }}
           ODOOHOST_EMAIL: ${{ secrets.ORG_ODOOHOST_EMAIL }}
           ODOOHOST_PASSWORD: ${{ secrets.ORG_ODOOHOST_PASSWORD }}
         with:
@@ -142,7 +144,7 @@ jobs:
               --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \
               --run_name '"Id: ${{ github.run_id }}"' \
               --branch_name ${{ github.event.pull_request.base.ref }} \
-              --odoohost_base_url ${{ secrets.ORG_ODOOHOST_BASE_URL }} \
+              --odoohost_base_url ${{ vars.ORG_ODOOHOST_BASE_URL }} \
               --odoohost_email ${{ secrets.ORG_ODOOHOST_EMAIL }} \
               --odoohost_password ${{ secrets.ORG_ODOOHOST_PASSWORD }} \
               --send_report_to_odoohost \
