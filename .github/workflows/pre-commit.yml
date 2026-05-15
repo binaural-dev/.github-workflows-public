@@ -1,3 +1,8 @@
+# Secrets and variables required:
+# - variables:
+#   - ENABLE_ORG_CICD_PRE_COMMIT
+#   - ENABLE_REPO_CICD_PRE_COMMIT
+
 name: pre-commit
 
 on:
@@ -8,6 +13,19 @@ jobs:
   pre-commit:
     runs-on: ubuntu-22.04
     steps:
+      - name: Action Deshabilitada por configuración
+        if: ${{ vars.ENABLE_ORG_CICD_PRE_COMMIT != 1 || vars.ENABLE_REPO_CICD_PRE_COMMIT != 1 }}
+        run: |
+          echo "⚠️ Las configuraciones de activación no están habilitadas:"
+
+          echo "ENABLE_ORG_CICD_PRE_COMMIT=${{ vars.ENABLE_ORG_CICD_PRE_COMMIT }}"
+
+          echo "ENABLE_REPO_CICD_PRE_COMMIT=${{ vars.ENABLE_REPO_CICD_PRE_COMMIT }}"
+
+          echo "Saliendo sin ejecutar tests."
+          exit 0
+
+
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
