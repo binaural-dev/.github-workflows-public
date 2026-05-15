@@ -122,7 +122,7 @@ jobs:
 
       - name: Ejecutar CLI desde mount-cicd-tool
         if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' &&  vars.ENABLE_ORG_CICD_CHECK_PR_TESTS == '1' && vars.ENABLE_REPO_CICD_CHECK_PR_TESTS == '1' }}
-        uses: binaural-dev/.github-workflows-public/.github/actions/mount-cicd-tool@staging
+        uses: binaural-dev/.github-workflows-public/.github/actions/mount-cicd-tool@release
         env:
           ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           S3_ACCESS_KEY: ${{ secrets.ORG_S3_ACCESS_KEY }}
@@ -137,7 +137,7 @@ jobs:
           ODOOHOST_EMAIL: ${{ secrets.ORG_ODOOHOST_EMAIL }}
           ODOOHOST_PASSWORD: ${{ secrets.ORG_ODOOHOST_PASSWORD }}
         with:
-          TOOL_BRANCH: "rls_feature-ta_62762_add_coverage_report_to_action"
+          TOOL_BRANCH: "release"
           CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           cli-command: |
             chcli devops code-review run-tests-from-pull-request-by-branch-settings \
