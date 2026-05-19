@@ -33,5 +33,4 @@ jobs:
           CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           cli-command: |
             chcli devops code-review pre-commit \
-              --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \ 
-              -m ${{ vars.REPO_PRECOMMIT_MODE }}
+              --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} -m ${{ vars.REPO_PRECOMMIT_MODE }}
