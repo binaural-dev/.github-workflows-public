@@ -21,11 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Crear archivo de configuración de pre-commit
+        if: ${{ vars.REPO_PRECOMMIT_CONFIG != '' }}
         run: |
           echo "${{ vars.REPO_PRECOMMIT_CONFIG }}" > .pre-commit-config.yaml
           cat .pre-commit-config.yaml
-          pwd
       - name: Run pre-commit
+        if: ${{ vars.REPO_PRECOMMIT_CONFIG != '' }}
         uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@release
         env:
           ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
@@ -39,4 +40,6 @@ jobs:
           CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           cli-command: |
             chcli devops code-review pre-commit \
-              --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} -m ${{ vars.REPO_PRECOMMIT_MODE }} --config-path .pre-commit-config.yaml
+              --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \
+              -m ${{ vars.REPO_PRECOMMIT_MODE }} \
+              --config-path .pre-commit-config.yaml
