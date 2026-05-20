@@ -1,6 +1,7 @@
 # Secrets and variables required:
 # - variables:
 #   - REPO_PRECOMMIT_MODE
+#   - REPO_PRECOMMIT_CONFIG
 # - secrets:
 #   - ORG_CICD_TOKEN
 #   - ORG_S3_ACCESS_KEY
@@ -19,7 +20,13 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-      - name: Run pre-commit
+      - name: Crear archivo de configuración de pre-commit
+        if: ${{ vars.REPO_PRECOMMIT_CONFIG != '' }}
+        run: |
+          echo "${{ vars.REPO_PRECOMMIT_CONFIG }}" > .pre-commit-config.yaml
+          cat .pre-commit-config.yaml
+      - name: PRE-COMMIT CHECKS (--config-path)
+        if: ${{ vars.REPO_PRECOMMIT_CONFIG != '' }}
         uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@release
         env:
           ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
@@ -33,4 +40,23 @@ jobs:
           CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           cli-command: |
             chcli devops code-review pre-commit \
-              --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} -m ${{ vars.REPO_PRECOMMIT_MODE }}
+              --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \
+              -m ${{ vars.REPO_PRECOMMIT_MODE }} \
+              --config-path "${{ github.workspace }}/.pre-commit-config.yaml"
+      - name: PRE-COMMIT CHECKS (default config)
+        if: ${{ vars.REPO_PRECOMMIT_CONFIG == '' }}
+        uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@release
+        env:
+          ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
+          S3_ACCESS_KEY: ${{ secrets.ORG_S3_ACCESS_KEY }}
+          S3_SECRET_KEY: ${{ secrets.ORG_S3_SECRET_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.ORG_S3_BUCKET_NAME }}
+          S3_ENDPOINT_URL: ${{ secrets.ORG_S3_ENDPOINT_URL }}
+          S3_REGION_NAME: ${{ secrets.ORG_S3_REGION_NAME }}
+        with:
+          BINCLI_BRANCH_OR_TAG: 'release'
+          CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
+          cli-command: |
+            chcli devops code-review pre-commit \
+              --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \
+              -m ${{ vars.REPO_PRECOMMIT_MODE }}
