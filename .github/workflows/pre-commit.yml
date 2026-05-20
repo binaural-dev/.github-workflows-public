@@ -42,7 +42,7 @@ jobs:
             chcli devops code-review pre-commit \
               --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \
               -m ${{ vars.REPO_PRECOMMIT_MODE }} \
-              --config-path .pre-commit-config.yaml
+              --config-path "${{ github.workspace }}/.pre-commit-config.yaml"
       - name: PRE-COMMIT CHECKS (default config)
         if: ${{ vars.REPO_PRECOMMIT_CONFIG == '' }}
         uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@release
