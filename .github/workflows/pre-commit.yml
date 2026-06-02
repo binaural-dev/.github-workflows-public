@@ -54,4 +54,6 @@ jobs:
             chcli devops code-review pre-commit \
               --pull_request_url https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} \
               -m ${{ vars.REPO_PRECOMMIT_MODE }} \
-              --remote-configs ${{ vars.REPO_PRECOMMIT_REMOTE_CONFIGS }}
+              --remote-configs ${{ vars.REPO_PRECOMMIT_REMOTE_CONFIGS }} \
+              --conditional-remote-config-for-branch ${{ vars.REPO_PRECOMMIT_REMOTE_CONFIGS_FOR_BRANCH }} \
+              --apply-remote-config-for-branch ${{ github.event.pull_request.base.ref }}
