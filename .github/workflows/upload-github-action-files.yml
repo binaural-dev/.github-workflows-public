@@ -19,6 +19,7 @@ jobs:
   run-cli-command:
     if: github.actor == 'binauralbot'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Install and run BINCLI to upload GitHub Action files by lot
         uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@release
