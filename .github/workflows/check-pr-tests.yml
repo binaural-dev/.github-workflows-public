@@ -31,6 +31,7 @@ on:
 jobs:
   run-cli-command:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
 
