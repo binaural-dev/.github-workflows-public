@@ -39,6 +39,7 @@ jobs:
           [[ -z "${{ vars.REPO_PRECOMMIT_REMOTE_CONFIGS }}" ]] && echo "❌ Falta REPO_PRECOMMIT_REMOTE_CONFIGS" && exit 1
           [[ -z "${{ vars.REPO_PRECOMMIT_REMOTE_CONFIGS_FOR_BRANCH }}" ]] && echo "❌ Falta REPO_PRECOMMIT_REMOTE_CONFIGS_FOR_BRANCH" && exit 1
           [[ -z "${{ vars.REPO_PRECOMMIT_FORCE_REMOTE_CONFIG_FOR_ODOO_VERSION_BRANCH }}" ]] && echo "❌ Falta REPO_PRECOMMIT_FORCE_REMOTE_CONFIG_FOR_ODOO_VERSION_BRANCH" && exit 1
+          [[ -z "${{ vars.REPO_PRECOMMIT_INCLUDE_SUBMODULE }}" ]] && echo "❌ Falta REPO_PRECOMMIT_INCLUDE_SUBMODULE" && exit 1
 
           echo "✅ Todas las variables están presentes."
       - name: PRE-COMMIT CHECKS
@@ -60,4 +61,5 @@ jobs:
               --remote-configs ${{ vars.REPO_PRECOMMIT_REMOTE_CONFIGS }} \
               --conditional-remote-config-for-branch ${{ vars.REPO_PRECOMMIT_REMOTE_CONFIGS_FOR_BRANCH }} \
               --apply-remote-config-for-branch ${{ github.event.pull_request.base.ref }} \
-              --force-remote-config-for-odoo-version-branch ${{ vars.REPO_PRECOMMIT_FORCE_REMOTE_CONFIG_FOR_ODOO_VERSION_BRANCH }}
+              --force-remote-config-for-odoo-version-branch ${{ vars.REPO_PRECOMMIT_FORCE_REMOTE_CONFIG_FOR_ODOO_VERSION_BRANCH }} \
+              --include-submodule ${{ vars.REPO_PRECOMMIT_INCLUDE_SUBMODULE }}
