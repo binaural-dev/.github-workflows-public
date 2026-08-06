@@ -1,0 +1,62 @@
+# Indexa openspec/specs/ en Onyx cuando cambian las specs.
+#
+# El script vive en .github/workflows/resources/sync_openspec_onyx/ y no tiene
+# dependencias (solo stdlib), así que no hace falta requirements.txt ni pip.
+#
+# Requiere el secret ONYX_API_KEY en la organización binaural-dev
+# (Onyx > Admin > Service Accounts).
+#
+# Las specs OpenSpec se están levantando vertical por vertical, así que hay repos
+# y módulos que todavía no las tienen. El workflow lo contempla: si no encuentra
+# openspec/specs/ sale con un aviso en vez de fallar.
+
+name: Sync OpenSpec → Onyx
+
+on:
+  push:
+    branches:
+      - "17.0"
+      - "19.0"
+    paths:
+      - "openspec/specs/**"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Solo mostrar qué se indexaría"
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GFLOW_RESOURCES_PATH: .github/workflows/resources/sync_openspec_onyx
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El script usa `git log` para fechar cada spec; sin historial
+          # todas quedarían con la fecha del checkout.
+          fetch-depth: 0
+
+      - name: ¿Hay specs en este repo?
+        id: check
+        run: |
+          if [ -d openspec/specs ]; then
+            echo "hay=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "hay=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Este repo no tiene openspec/specs/ — nada que indexar."
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.hay == 'true'
+        with:
+          python-version: "3.11"
+
+      - name: Sincronizar con Onyx
+        if: steps.check.outputs.hay == 'true'
+        env:
+          ONYX_API_KEY: ${{ secrets.ONYX_API_KEY }}
+        run: |
+          python3 "${GFLOW_RESOURCES_PATH}/sync-openspec-onyx.py" \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
