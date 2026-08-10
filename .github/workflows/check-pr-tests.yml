@@ -21,6 +21,9 @@
 #   - REPO_CICD_CHECK_PR_TARGET_BRANCHES
 #   - REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS
 #   - ORG_ODOOHOST_BASE_URL
+#   - DO_RECURSIVE (optional, default: "0") -- "1" corre el arbol completo
+#     de dependencias de los modulos modificados (--recursive de
+#     scripts/odoo-test) en vez de solo esos modulos.
 
 name: Check PR Tests
 
@@ -149,4 +152,5 @@ jobs:
               --odoohost_email ${{ secrets.ORG_ODOOHOST_EMAIL }} \
               --odoohost_password ${{ secrets.ORG_ODOOHOST_PASSWORD }} \
               --send_report_to_odoohost \
-              --json-settings '${{ vars.REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS }}'
+              --json-settings '${{ vars.REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS }}' \
+              --recursive ${{ vars.DO_RECURSIVE || '0' }}
