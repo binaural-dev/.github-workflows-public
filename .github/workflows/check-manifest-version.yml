@@ -1,0 +1,84 @@
+# .github/workflows/check-manifest-version.yml
+
+# Secrets and variables required:
+# - variables:
+#   - ENABLE_ORG_CICD_CHECK_MANIFEST_VERSION
+#   - ENABLE_REPO_CICD_CHECK_MANIFEST_VERSION
+#   - REPO_CICD_CHECK_MANIFEST_VERSION_TARGET_BRANCHES
+#   - REPO_CICD_CHECK_MANIFEST_VERSION_MODULES_GLOB
+#     -- Igual criterio que REPO_CICD_CHECK_OPENSPEC_MODULES_GLOB: en los
+#        repos de clientes (módulos en la raíz) el valor típico es "*/".
+#
+# Valida que todo módulo tocado por el PR (cualquier archivo suyo, sin
+# excepción) tenga en __manifest__.py una "version" mayor a la que tenía en
+# la rama base. Comparación numérica segmento a segmento (ej. "19.0.2.0.2" >
+# "19.0.2.0.1"), no lexicográfica. Un módulo nuevo (no existía en la rama
+# base) queda exento de la comparación, solo se exige que tenga el campo
+# version bien formado. Un módulo borrado por completo en el PR no se
+# valida (ya no tiene __manifest__.py en el head).
+
+name: Check Manifest Version Bump
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-manifest-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+
+      - name: Action Deshabilitada por configuración
+        if: ${{ vars.ENABLE_ORG_CICD_CHECK_MANIFEST_VERSION != '1' || vars.ENABLE_REPO_CICD_CHECK_MANIFEST_VERSION != '1' }}
+        run: |
+          echo "⚠️ Las configuraciones de activación no están habilitadas:"
+          echo "ENABLE_ORG_CICD_CHECK_MANIFEST_VERSION=${{ vars.ENABLE_ORG_CICD_CHECK_MANIFEST_VERSION }}"
+          echo "ENABLE_REPO_CICD_CHECK_MANIFEST_VERSION=${{ vars.ENABLE_REPO_CICD_CHECK_MANIFEST_VERSION }}"
+          echo "Saliendo sin ejecutar validación."
+          exit 0
+
+      - name: Validar configuración requerida
+        id: check_required_settings
+        if: ${{ vars.ENABLE_ORG_CICD_CHECK_MANIFEST_VERSION == '1' && vars.ENABLE_REPO_CICD_CHECK_MANIFEST_VERSION == '1' }}
+        run: |
+          echo "🔍 Validando rama destino: ${{ github.event.pull_request.base.ref }}"
+
+          ALLOWED_BRANCHES="${{ vars.REPO_CICD_CHECK_MANIFEST_VERSION_TARGET_BRANCHES }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          HABILITADO=0
+          IFS=',' read -ra ALLOWED <<< "$ALLOWED_BRANCHES"
+          for branch in "${ALLOWED[@]}"; do
+            if [[ "$branch" == "$BASE_REF" ]]; then
+              HABILITADO=1
+            fi
+          done
+          echo "allow_run_next_steps=$HABILITADO" >> $GITHUB_OUTPUT
+
+          if [[ $HABILITADO -eq 0 ]]; then
+            echo "⚠️ La rama '$BASE_REF' no está permitida para este workflow."
+            echo "Saliendo sin ejecutar validación."
+            exit 0
+          else
+            echo "✅ Rama permitida: $BASE_REF"
+          fi
+
+          [[ -z "${{ vars.REPO_CICD_CHECK_MANIFEST_VERSION_MODULES_GLOB }}" ]] && echo "❌ Falta REPO_CICD_CHECK_MANIFEST_VERSION_MODULES_GLOB" && exit 1
+
+          echo "✅ Todas las variables están presentes."
+
+      - name: Checkout del PR
+        if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_CHECK_MANIFEST_VERSION == '1' && vars.ENABLE_REPO_CICD_CHECK_MANIFEST_VERSION == '1' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validar versión de manifest en módulos tocados
+        if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_CHECK_MANIFEST_VERSION == '1' && vars.ENABLE_REPO_CICD_CHECK_MANIFEST_VERSION == '1' }}
+        uses: binaural-dev/.github-workflows-public/.github/actions/check-manifest-version@release
+        with:
+          modules-glob: ${{ vars.REPO_CICD_CHECK_MANIFEST_VERSION_MODULES_GLOB }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
