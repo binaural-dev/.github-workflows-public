@@ -89,7 +89,7 @@ jobs:
 
       - name: Validar módulos tocados contra OpenSpec
         if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_CHECK_OPENSPEC == '1' && vars.ENABLE_REPO_CICD_CHECK_OPENSPEC == '1' }}
-        uses: binaural-dev/.github-workflows-public/.github/actions/check-openspec@release
+        uses: binaural-dev/.github-workflows-public/.github/actions/check-openspec@rls_feat-consolidate_client_repo_checks
         with:
           modules-glob: ${{ vars.REPO_CICD_CHECK_OPENSPEC_MODULES_GLOB }}
           base-sha: ${{ github.event.pull_request.base.sha }}
