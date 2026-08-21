@@ -1,0 +1,125 @@
+# .github/actions/check-openspec/action.yml
+name: Check OpenSpec Compliance
+description: Valida que los módulos tocados por el PR tengan respaldo en OpenSpec (carpeta openspec/ con al menos un change activo o spec)
+inputs:
+  modules-glob:
+    required: true
+    description: 'Glob de las carpetas raíz de módulo del repo, relativo al root (ej. "src/custom/*/*" o "addons/*")'
+  base-sha:
+    required: true
+    description: 'SHA base contra el que se calcula el diff (normalmente github.event.pull_request.base.sha)'
+  head-sha:
+    required: true
+    description: 'SHA head del PR (normalmente github.event.pull_request.head.sha)'
+runs:
+  using: "composite"
+  steps:
+    - name: Validar módulos tocados contra OpenSpec
+      shell: bash
+      env:
+        MODULES_GLOB: ${{ inputs.modules-glob }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+      run: |
+        set -e
+
+        echo "🔍 Calculando archivos modificados entre $BASE_SHA y $HEAD_SHA..."
+        CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+        if [[ -z "$CHANGED_FILES" ]]; then
+          echo "ℹ️ No hay archivos modificados. Nada que validar."
+          exit 0
+        fi
+
+        echo "🔍 Resolviendo carpetas raíz de módulo (glob: $MODULES_GLOB)..."
+
+        # Arma la lista de candidatas según el glob del repo, y se queda solo
+        # con las que son módulos Odoo reales (tienen __manifest__.py). Esto
+        # descarta carpetas no-módulo que puedan matchear el glob a lo bruto
+        # (ej. una carpeta "openspec/" de repo, ".github/", "i18n/") y de paso
+        # excluye automáticamente los módulos borrados por completo en este PR
+        # (su __manifest__.py ya no existe en el head checkeado).
+        shopt -s nullglob
+        CANDIDATE_DIRS=($MODULES_GLOB)
+        shopt -u nullglob
+
+        MODULE_DIRS=()
+        for m in "${CANDIDATE_DIRS[@]}"; do
+          m_clean="${m%/}"
+          [[ -f "$m_clean/__manifest__.py" ]] && MODULE_DIRS+=("$m_clean")
+        done
+
+        if [[ ${#MODULE_DIRS[@]} -eq 0 ]]; then
+          echo "⚠️ El glob '$MODULES_GLOB' no matcheó ningún módulo con __manifest__.py. Revisá REPO_CICD_CHECK_OPENSPEC_MODULES_GLOB."
+          exit 0
+        fi
+
+        # De los archivos cambiados, deduce a qué carpeta de módulo pertenece cada uno
+        TOUCHED_MODULES=()
+        while IFS= read -r f; do
+          [[ -z "$f" ]] && continue
+          for m in "${MODULE_DIRS[@]}"; do
+            m_clean="${m%/}"
+            if [[ "$f" == "$m_clean"/* ]]; then
+              TOUCHED_MODULES+=("$m_clean")
+              break
+            fi
+          done
+        done <<< "$CHANGED_FILES"
+
+        # Únicos
+        UNIQUE_MODULES=($(printf '%s\n' "${TOUCHED_MODULES[@]}" | sort -u))
+
+        if [[ ${#UNIQUE_MODULES[@]} -eq 0 ]]; then
+          echo "ℹ️ Ningún archivo modificado cae dentro de una carpeta de módulo reconocida. Nada que validar."
+          exit 0
+        fi
+
+        echo "📦 Módulos tocados por el PR:"
+        printf '  - %s\n' "${UNIQUE_MODULES[@]}"
+        echo ""
+
+        FAILED=0
+        for module in "${UNIQUE_MODULES[@]}"; do
+          OPENSPEC_DIR="$module/openspec"
+
+          if [[ ! -d "$OPENSPEC_DIR" ]]; then
+            # El módulo no está adherido a la convención OpenSpec todavía: se omite (opt-in)
+            echo "⏭️  $module no tiene carpeta openspec/, se omite (convención opt-in)."
+            continue
+          fi
+
+          # Cuenta changes activos en openspec/changes/. Dos convenciones conviven
+          # en los repos de clientes: carpeta por change (con proposal.md/tasks.md
+          # adentro) o un .md suelto por change. Se acepta cualquiera de las dos,
+          # excluyendo siempre archive/.
+          ACTIVE_CHANGES=$(find "$OPENSPEC_DIR/changes" -mindepth 1 -maxdepth 1 \
+            \( -type d ! -name "archive" \) -o \( -type f -name "*.md" \) \
+            2>/dev/null | wc -l | tr -d ' ')
+
+          # Señal alternativa: el PR edita directamente un spec ya aceptado
+          # (openspec/specs/) sin pasar por un change nuevo. Algunos módulos
+          # (ej. cdd_pos) no mantienen carpeta changes/ y actualizan el spec
+          # directo — se acepta como respaldo válido igual.
+          SPECS_TOUCHED=0
+          if printf '%s\n' "$CHANGED_FILES" | grep -qF "$OPENSPEC_DIR/specs/"; then
+            SPECS_TOUCHED=1
+          fi
+
+          if [[ "$ACTIVE_CHANGES" -eq 0 && "$SPECS_TOUCHED" -eq 0 ]]; then
+            echo "❌ $module tiene openspec/ pero ningún change activo en openspec/changes/ ni un spec tocado en openspec/specs/."
+            echo "   Creá una propuesta con 'openspec change' antes de mergear, o actualizá el spec correspondiente."
+            FAILED=1
+          else
+            echo "✅ $module: $ACTIVE_CHANGES change(s) activo(s), specs tocados: $SPECS_TOUCHED."
+          fi
+        done
+
+        if [[ "$FAILED" -eq 1 ]]; then
+          echo ""
+          echo "❌ Uno o más módulos modificados no tienen respaldo en OpenSpec."
+          exit 1
+        fi
+
+        echo ""
+        echo "✅ Todos los módulos tocados cumplen con la convención OpenSpec."
