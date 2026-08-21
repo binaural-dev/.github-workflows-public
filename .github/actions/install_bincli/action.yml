@@ -162,7 +162,14 @@ runs:
 
         echo "🚀 Running CLI command..."
 
-        echo "${{ inputs.cli-command }}" > /tmp/bincli_script__cli-command.sh
+        # Heredoc con delimitador entre comillas simples: copia el contenido
+        # literal sin que bash interprete las comillas dobles que trae
+        # cli-command (ej. un --json-settings). `echo "${{ inputs.cli-command }}"`
+        # rompía esto: cada comilla doble embebida cerraba/abría el propio
+        # echo, y terminaba comiéndose todas las comillas del JSON.
+        cat <<'CLI_COMMAND_EOF' > /tmp/bincli_script__cli-command.sh
+        ${{ inputs.cli-command }}
+        CLI_COMMAND_EOF
 
         cat /tmp/bincli_script__cli-command.sh
 
