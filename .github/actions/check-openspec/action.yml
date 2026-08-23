@@ -89,6 +89,15 @@ runs:
             continue
           fi
 
+          # Bump puro de manifest (único archivo tocado del módulo es
+          # __manifest__.py, ej. subir versión sin cambio funcional): exento
+          # de spec, igual criterio que el opt-in de arriba.
+          MODULE_TOUCHED_FILES=$(printf '%s\n' "$CHANGED_FILES" | grep "^$module/" || true)
+          if [[ "$MODULE_TOUCHED_FILES" == "$module/__manifest__.py" ]]; then
+            echo "⏭️  $module: único archivo tocado es __manifest__.py (bump puro), se omite spec."
+            continue
+          fi
+
           # Cuenta changes activos que este PR realmente tocó en
           # openspec/changes/ (contra el diff, no contra lo que ya hubiera
           # en el disco) -- si no, un change viejo sin archivar de otro
