@@ -89,13 +89,16 @@ runs:
             continue
           fi
 
-          # Cuenta changes activos en openspec/changes/. Dos convenciones conviven
-          # en los repos de clientes: carpeta por change (con proposal.md/tasks.md
-          # adentro) o un .md suelto por change. Se acepta cualquiera de las dos,
-          # excluyendo siempre archive/.
-          ACTIVE_CHANGES=$(find "$OPENSPEC_DIR/changes" -mindepth 1 -maxdepth 1 \
-            \( -type d ! -name "archive" \) -o \( -type f -name "*.md" \) \
-            2>/dev/null | wc -l | tr -d ' ')
+          # Cuenta changes activos que este PR realmente tocó en
+          # openspec/changes/ (contra el diff, no contra lo que ya hubiera
+          # en el disco) -- si no, un change viejo sin archivar de otro
+          # trabajo previo "respalda" para siempre cualquier PR futuro que
+          # toque el módulo, sin que el PR haya escrito ninguna spec.
+          # Dos convenciones conviven en los repos de clientes: carpeta por
+          # change (con proposal.md/tasks.md adentro) o un .md suelto por
+          # change. Se acepta cualquiera de las dos, excluyendo siempre
+          # archive/.
+          ACTIVE_CHANGES=$(printf '%s\n' "$CHANGED_FILES" | grep "^$OPENSPEC_DIR/changes/[^/]" | grep -vc "^$OPENSPEC_DIR/changes/archive/" || true)
 
           # Señal alternativa: el PR edita directamente un spec ya aceptado
           # (openspec/specs/) sin pasar por un change nuevo. Algunos módulos
