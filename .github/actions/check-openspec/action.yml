@@ -89,12 +89,14 @@ runs:
             continue
           fi
 
-          # Bump puro de manifest (único archivo tocado del módulo es
-          # __manifest__.py, ej. subir versión sin cambio funcional): exento
-          # de spec, igual criterio que el opt-in de arriba.
+          # Archivos sin impacto funcional: bump puro de manifest (subir
+          # versión sin cambio de código) o edición de README. Si TODOS los
+          # archivos tocados del módulo caen en esta lista, se exime de
+          # spec -- mismo criterio que el opt-in de arriba.
           MODULE_TOUCHED_FILES=$(printf '%s\n' "$CHANGED_FILES" | grep "^$module/" || true)
-          if [[ "$MODULE_TOUCHED_FILES" == "$module/__manifest__.py" ]]; then
-            echo "⏭️  $module: único archivo tocado es __manifest__.py (bump puro), se omite spec."
+          NON_EXEMPT_FILES=$(printf '%s\n' "$MODULE_TOUCHED_FILES" | grep -vE "^$module/(__manifest__\.py|README\.(md|rst))$" || true)
+          if [[ -n "$MODULE_TOUCHED_FILES" && -z "$NON_EXEMPT_FILES" ]]; then
+            echo "⏭️  $module: solo se tocaron __manifest__.py y/o README (sin impacto funcional), se omite spec."
             continue
           fi
 
