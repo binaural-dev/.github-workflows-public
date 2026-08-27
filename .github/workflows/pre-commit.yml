@@ -70,6 +70,10 @@ jobs:
       # _bincli_fork@rls_feat-precommit_pass_pr_context_env). No reemplaza el
       # step de arriba, corre en paralelo solo para comparar resultados.
       # Quitar antes de mergear a release.
+      - name: "[TEST] Limpiar bincli del step anterior"
+        shell: bash
+        run: rm -rf bincli
+
       - name: "[TEST] PRE-COMMIT CHECKS (prototipo hooks openspec/manifest-version)"
         uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@rls_feat-consolidate_client_repo_checks
         env:
