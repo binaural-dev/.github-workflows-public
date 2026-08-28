@@ -1,0 +1,142 @@
+# .github/actions/check-manifest-version/action.yml
+name: Check Manifest Version Bump
+description: Valida que todo módulo tocado por el PR tenga la versión del __manifest__.py mayor a la de la rama base
+inputs:
+  modules-glob:
+    required: true
+    description: 'Glob de las carpetas candidatas a módulo, relativo al root (ej. "*/" en repos de cliente con módulos en la raíz)'
+  base-sha:
+    required: true
+    description: 'SHA base contra el que se compara la versión (normalmente github.event.pull_request.base.sha)'
+  head-sha:
+    required: true
+    description: 'SHA head del PR (normalmente github.event.pull_request.head.sha)'
+runs:
+  using: "composite"
+  steps:
+    - name: Validar bump de versión en módulos tocados
+      shell: bash
+      env:
+        MODULES_GLOB: ${{ inputs.modules-glob }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+      run: |
+        set -e
+
+        # Devuelve 0 (éxito) si $1 > $2 comparando segmento a segmento
+        # (numérico cuando se puede, string si no), sin importar la
+        # cantidad de segmentos de cada lado (ej. "19.0.2.0.2" vs "1.0").
+        version_gt() {
+          local IFS=.
+          local -a v1=($1) v2=($2)
+          local maxlen=${#v1[@]}
+          (( ${#v2[@]} > maxlen )) && maxlen=${#v2[@]}
+          for ((i = 0; i < maxlen; i++)); do
+            local a="${v1[i]:-0}"
+            local b="${v2[i]:-0}"
+            if [[ "$a" =~ ^[0-9]+$ && "$b" =~ ^[0-9]+$ ]]; then
+              (( a > b )) && return 0
+              (( a < b )) && return 1
+            else
+              [[ "$a" > "$b" ]] && return 0
+              [[ "$a" < "$b" ]] && return 1
+            fi
+          done
+          return 1
+        }
+
+        # Extrae el campo "version" de un __manifest__.py (dict literal de
+        # Python) leído por stdin, sin ejecutarlo. Una sola línea a
+        # propósito: un heredoc multilínea acá rompe la indentación del
+        # bloque YAML "run: |" (Python exige columna 0 a nivel de módulo,
+        # YAML exige que todo el bloque quede indentado).
+        extract_version() {
+          python3 -c 'import ast, sys; print(ast.literal_eval(sys.stdin.read()).get("version", ""))' 2>/dev/null
+        }
+
+        echo "🔍 Calculando archivos modificados entre $BASE_SHA y $HEAD_SHA..."
+        CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+        if [[ -z "$CHANGED_FILES" ]]; then
+          echo "ℹ️ No hay archivos modificados. Nada que validar."
+          exit 0
+        fi
+
+        echo "🔍 Resolviendo carpetas raíz de módulo (glob: $MODULES_GLOB)..."
+
+        shopt -s nullglob
+        CANDIDATE_DIRS=($MODULES_GLOB)
+        shopt -u nullglob
+
+        MODULE_DIRS=()
+        for m in "${CANDIDATE_DIRS[@]}"; do
+          m_clean="${m%/}"
+          [[ -f "$m_clean/__manifest__.py" ]] && MODULE_DIRS+=("$m_clean")
+        done
+
+        if [[ ${#MODULE_DIRS[@]} -eq 0 ]]; then
+          echo "⚠️ El glob '$MODULES_GLOB' no matcheó ningún módulo con __manifest__.py. Revisá REPO_CICD_CHECK_MANIFEST_VERSION_MODULES_GLOB."
+          exit 0
+        fi
+
+        TOUCHED_MODULES=()
+        while IFS= read -r f; do
+          [[ -z "$f" ]] && continue
+          for m in "${MODULE_DIRS[@]}"; do
+            m_clean="${m%/}"
+            if [[ "$f" == "$m_clean"/* ]]; then
+              TOUCHED_MODULES+=("$m_clean")
+              break
+            fi
+          done
+        done <<< "$CHANGED_FILES"
+
+        UNIQUE_MODULES=($(printf '%s\n' "${TOUCHED_MODULES[@]}" | sort -u))
+
+        if [[ ${#UNIQUE_MODULES[@]} -eq 0 ]]; then
+          echo "ℹ️ Ningún archivo modificado cae dentro de una carpeta de módulo reconocida. Nada que validar."
+          exit 0
+        fi
+
+        echo "📦 Módulos tocados por el PR:"
+        printf '  - %s\n' "${UNIQUE_MODULES[@]}"
+        echo ""
+
+        FAILED=0
+        for module in "${UNIQUE_MODULES[@]}"; do
+          HEAD_VERSION=$(extract_version < "$module/__manifest__.py")
+
+          if [[ -z "$HEAD_VERSION" ]]; then
+            echo "❌ $module: no se pudo leer el campo 'version' de __manifest__.py."
+            FAILED=1
+            continue
+          fi
+
+          if ! BASE_MANIFEST=$(git show "$BASE_SHA:$module/__manifest__.py" 2>/dev/null); then
+            echo "🆕 $module es un módulo nuevo (no existía en la rama base). Versión declarada: $HEAD_VERSION."
+            continue
+          fi
+
+          BASE_VERSION=$(extract_version <<< "$BASE_MANIFEST")
+
+          if [[ -z "$BASE_VERSION" ]]; then
+            echo "🆕 $module: el manifest base no tenía 'version' legible, se toma como módulo nuevo. Versión declarada: $HEAD_VERSION."
+            continue
+          fi
+
+          if version_gt "$HEAD_VERSION" "$BASE_VERSION"; then
+            echo "✅ $module: $BASE_VERSION → $HEAD_VERSION."
+          else
+            echo "❌ $module: la versión no subió ($BASE_VERSION → $HEAD_VERSION). Hay que bumpear __manifest__.py."
+            FAILED=1
+          fi
+        done
+
+        if [[ "$FAILED" -eq 1 ]]; then
+          echo ""
+          echo "❌ Uno o más módulos modificados no tienen la versión del manifest actualizada."
+          exit 1
+        fi
+
+        echo ""
+        echo "✅ Todos los módulos tocados tienen su versión de manifest actualizada."

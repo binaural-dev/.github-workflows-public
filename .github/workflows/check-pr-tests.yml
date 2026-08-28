@@ -126,7 +126,7 @@ jobs:
 
       - name: Ejecutar CLI desde mount-cicd-tool
         if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' &&  vars.ENABLE_ORG_CICD_CHECK_PR_TESTS == '1' && vars.ENABLE_REPO_CICD_CHECK_PR_TESTS == '1' }}
-        uses: binaural-dev/.github-workflows-public/.github/actions/mount-cicd-tool@release
+        uses: binaural-dev/.github-workflows-public/.github/actions/mount-cicd-tool@rls_feat-consolidate_client_repo_checks
         env:
           ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           S3_ACCESS_KEY: ${{ secrets.ORG_S3_ACCESS_KEY }}
@@ -141,7 +141,7 @@ jobs:
           ODOOHOST_EMAIL: ${{ secrets.ORG_ODOOHOST_EMAIL }}
           ODOOHOST_PASSWORD: ${{ secrets.ORG_ODOOHOST_PASSWORD }}
         with:
-          TOOL_BRANCH: "release"
+          TOOL_BRANCH: "rls_fix-auto_detect_addons_nested_bundles"
           CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           cli-command: |
             chcli devops code-review run-tests-from-pull-request-by-branch-settings \

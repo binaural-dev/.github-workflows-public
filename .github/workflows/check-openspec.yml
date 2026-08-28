@@ -1,0 +1,96 @@
+# .github/workflows/check-openspec.yml
+
+# Secrets and variables required:
+# - variables:
+#   - ENABLE_ORG_CICD_CHECK_OPENSPEC
+#   - ENABLE_REPO_CICD_CHECK_OPENSPEC
+#   - REPO_CICD_CHECK_OPENSPEC_TARGET_BRANCHES
+#   - REPO_CICD_CHECK_OPENSPEC_MODULES_GLOB
+#     -- Glob relativo al root del repo que apunta a las carpetas candidatas
+#        a módulo. En los repos de clientes (personalizaciones de
+#        Implementación) los módulos viven en la raíz del repo, así que el
+#        valor típico es "*/" (ej. cdd-las-mercedes, maxcam-ext, giralda).
+#        En docker-odoo, donde los módulos cuelgan de src/custom/<cliente>/,
+#        sería "src/custom/*/*". Las carpetas candidatas que no tengan
+#        __manifest__.py se descartan automáticamente (así se ignoran cosas
+#        como una carpeta openspec/ de repo, o un módulo borrado por
+#        completo en el propio PR).
+#
+# Validación "solo existencia", pensada para las personalizaciones de
+# clientes (no para el repo de localización de Odoo Venezuela, que tiene su
+# propio pipeline de tests). Un módulo tocado por el PR se considera con
+# respaldo en OpenSpec si:
+#   - tiene al menos un change activo en openspec/changes/ (carpeta por
+#     change con proposal.md, o un .md suelto -- conviven ambas
+#     convenciones en los repos reales), o
+#   - el PR toca directamente un archivo bajo openspec/specs/ (algunos
+#     módulos actualizan el spec aceptado sin pasar por un change nuevo).
+# Los módulos sin carpeta openspec/ se omiten (adopción opt-in, no rompe
+# módulos que todavía no migraron a la convención). Por el mismo motivo, un
+# PR que borra un módulo entero que nunca tuvo openspec/ tampoco se valida.
+
+name: Check OpenSpec Compliance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-openspec:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+
+      - name: Action Deshabilitada por configuración
+        if: ${{ vars.ENABLE_ORG_CICD_CHECK_OPENSPEC != '1' || vars.ENABLE_REPO_CICD_CHECK_OPENSPEC != '1' }}
+        run: |
+          echo "⚠️ Las configuraciones de activación no están habilitadas:"
+          echo "ENABLE_ORG_CICD_CHECK_OPENSPEC=${{ vars.ENABLE_ORG_CICD_CHECK_OPENSPEC }}"
+          echo "ENABLE_REPO_CICD_CHECK_OPENSPEC=${{ vars.ENABLE_REPO_CICD_CHECK_OPENSPEC }}"
+          echo "Saliendo sin ejecutar validación."
+          exit 0
+
+      - name: Validar configuración requerida
+        id: check_required_settings
+        if: ${{ vars.ENABLE_ORG_CICD_CHECK_OPENSPEC == '1' && vars.ENABLE_REPO_CICD_CHECK_OPENSPEC == '1' }}
+        run: |
+          echo "🔍 Validando rama destino: ${{ github.event.pull_request.base.ref }}"
+
+          ALLOWED_BRANCHES="${{ vars.REPO_CICD_CHECK_OPENSPEC_TARGET_BRANCHES }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          HABILITADO=0
+          IFS=',' read -ra ALLOWED <<< "$ALLOWED_BRANCHES"
+          for branch in "${ALLOWED[@]}"; do
+            if [[ "$branch" == "$BASE_REF" ]]; then
+              HABILITADO=1
+            fi
+          done
+          echo "allow_run_next_steps=$HABILITADO" >> $GITHUB_OUTPUT
+
+          if [[ $HABILITADO -eq 0 ]]; then
+            echo "⚠️ La rama '$BASE_REF' no está permitida para este workflow."
+            echo "Saliendo sin ejecutar validación."
+            exit 0
+          else
+            echo "✅ Rama permitida: $BASE_REF"
+          fi
+
+          [[ -z "${{ vars.REPO_CICD_CHECK_OPENSPEC_MODULES_GLOB }}" ]] && echo "❌ Falta REPO_CICD_CHECK_OPENSPEC_MODULES_GLOB" && exit 1
+
+          echo "✅ Todas las variables están presentes."
+
+      - name: Checkout del PR
+        if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_CHECK_OPENSPEC == '1' && vars.ENABLE_REPO_CICD_CHECK_OPENSPEC == '1' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validar módulos tocados contra OpenSpec
+        if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_CHECK_OPENSPEC == '1' && vars.ENABLE_REPO_CICD_CHECK_OPENSPEC == '1' }}
+        uses: binaural-dev/.github-workflows-public/.github/actions/check-openspec@rls_feat-consolidate_client_repo_checks
+        with:
+          modules-glob: ${{ vars.REPO_CICD_CHECK_OPENSPEC_MODULES_GLOB }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
