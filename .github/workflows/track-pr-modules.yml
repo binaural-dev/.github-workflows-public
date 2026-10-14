@@ -1,0 +1,150 @@
+# .github/workflows/track-pr-modules.yml
+
+# Secrets and variables required:
+# - secrets:
+#   - ORG_CICD_TOKEN
+#   - ORG_S3_ACCESS_KEY
+#   - ORG_S3_SECRET_KEY
+#   - ORG_S3_BUCKET_NAME
+#   - ORG_S3_ENDPOINT_URL
+#   - ORG_S3_REGION_NAME
+#   - ORG_ODOOHOST_EMAIL
+#   - ORG_ODOOHOST_PASSWORD
+# - variables:
+#   - ENABLE_ORG_CICD_TRACK_PR_MODULES
+#   - ENABLE_REPO_CICD_TRACK_PR_MODULES
+#   - REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES
+#   - ORG_ODOOHOST_BASE_URL
+#   - ORG_ODOOHOST_DB
+#   - ORG_ODOOHOST_GH_CONFIG_ID
+
+name: Track PR Modules
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  run-cli-command:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+
+      - name: Action Deshabilitada por configuración
+        if: ${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES != 1 || vars.ENABLE_REPO_CICD_TRACK_PR_MODULES != 1 }}
+        run: |
+          echo "⚠️ Las configuraciones de activación no están habilitadas:"
+          echo "ENABLE_ORG_CICD_TRACK_PR_MODULES=${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES }}"
+          echo "ENABLE_REPO_CICD_TRACK_PR_MODULES=${{ vars.ENABLE_REPO_CICD_TRACK_PR_MODULES }}"
+          echo "REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES=${{ vars.REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES }}"
+          echo "Saliendo sin ejecutar tracking."
+          exit 0
+
+      - name: Validar configuración requerida
+        id: check_required_settings
+        if: ${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES == '1' && vars.ENABLE_REPO_CICD_TRACK_PR_MODULES == '1' }}
+        run: |
+          echo "🔍 Validando rama destino: ${{ github.event.pull_request.base.ref }}"
+
+          ALLOWED_BRANCHES="${{ vars.REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          HABILITADO=0
+          IFS=',' read -ra ALLOWED <<< "$ALLOWED_BRANCHES"
+          for branch in "${ALLOWED[@]}"; do
+            if [[ "$branch" == "$BASE_REF" ]]; then
+              HABILITADO=1
+            fi
+          done
+          echo "allow_run_next_steps=$HABILITADO" >> $GITHUB_OUTPUT
+
+          if [[ $HABILITADO -eq 0 ]]; then
+            echo "⚠️ La rama '$BASE_REF' no está permitida para este workflow."
+            echo "Saliendo sin ejecutar tracking."
+            exit 0
+          else
+            echo "✅ Rama permitida: $BASE_REF"
+          fi
+
+          # -----------------------------------
+
+          echo "🔍 Validando configuración..."
+
+          echo "🔧 Variables de configuración requeridas:"
+          cat <<EOF
+          Secrets and variables required:
+            - secrets:
+              - ORG_CICD_TOKEN
+              - ORG_S3_ACCESS_KEY
+              - ORG_S3_SECRET_KEY
+              - ORG_S3_BUCKET_NAME
+              - ORG_S3_ENDPOINT_URL
+              - ORG_S3_REGION_NAME
+              - ORG_ODOOHOST_EMAIL
+              - ORG_ODOOHOST_PASSWORD
+            - variables:
+              - REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES
+              - ORG_ODOOHOST_BASE_URL
+              - ORG_ODOOHOST_DB
+              - ORG_ODOOHOST_GH_CONFIG_ID
+          EOF
+
+          [[ -z "${{ vars.REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES }}" ]] && echo "❌ Falta REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES" && exit 1
+          [[ -z "${{ secrets.ORG_CICD_TOKEN }}" ]] && echo "❌ Falta ORG_CICD_TOKEN" && exit 1
+
+          # S3
+          [[ -z "${{ secrets.ORG_S3_ACCESS_KEY }}" ]] && echo "❌ Falta ORG_S3_ACCESS_KEY" && exit 1
+          [[ -z "${{ secrets.ORG_S3_SECRET_KEY }}" ]] && echo "❌ Falta ORG_S3_SECRET_KEY" && exit 1
+          [[ -z "${{ secrets.ORG_S3_BUCKET_NAME }}" ]] && echo "❌ Falta ORG_S3_BUCKET_NAME" && exit 1
+          [[ -z "${{ secrets.ORG_S3_ENDPOINT_URL }}" ]] && echo "❌ Falta ORG_S3_ENDPOINT_URL" && exit 1
+          [[ -z "${{ secrets.ORG_S3_REGION_NAME }}" ]] && echo "❌ Falta ORG_S3_REGION_NAME" && exit 1
+
+          # OdooHost
+          [[ -z "${{ vars.ORG_ODOOHOST_BASE_URL }}" ]] && echo "❌ Falta ORG_ODOOHOST_BASE_URL" && exit 1
+          [[ -z "${{ vars.ORG_ODOOHOST_DB }}" ]] && echo "❌ Falta ORG_ODOOHOST_DB" && exit 1
+          [[ -z "${{ secrets.ORG_ODOOHOST_EMAIL }}" ]] && echo "❌ Falta ORG_ODOOHOST_EMAIL" && exit 1
+          [[ -z "${{ secrets.ORG_ODOOHOST_PASSWORD }}" ]] && echo "❌ Falta ORG_ODOOHOST_PASSWORD" && exit 1
+          [[ -z "${{ vars.ORG_ODOOHOST_GH_CONFIG_ID }}" ]] && echo "❌ Falta ORG_ODOOHOST_GH_CONFIG_ID" && exit 1
+
+          echo "✅ Todas las variables están presentes."
+
+      - name: Instalar BINCLI y escanear módulos + sincronizar review teams
+        if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_TRACK_PR_MODULES == '1' && vars.ENABLE_REPO_CICD_TRACK_PR_MODULES == '1' }}
+        uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@release
+        env:
+          ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
+          S3_ACCESS_KEY: ${{ secrets.ORG_S3_ACCESS_KEY }}
+          S3_SECRET_KEY: ${{ secrets.ORG_S3_SECRET_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.ORG_S3_BUCKET_NAME }}
+          S3_ENDPOINT_URL: ${{ secrets.ORG_S3_ENDPOINT_URL }}
+          S3_REGION_NAME: ${{ secrets.ORG_S3_REGION_NAME }}
+        with:
+          BINCLI_BRANCH_OR_TAG: 'release'
+          CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
+          cli-command: |
+            chcli devops project scan-modules-json --json "$(
+            cat << 'EOF'
+            {
+                "run_id": ${{ github.run_id }},
+                "repo_url": "https://github.com/${{ github.repository }}",
+                "ref": "${{ github.event.pull_request.head.sha }}",
+                "odoohost_url": "${{ vars.ORG_ODOOHOST_BASE_URL }}",
+                "odoohost_db": "${{ vars.ORG_ODOOHOST_DB }}",
+                "odoohost_email": "${{ secrets.ORG_ODOOHOST_EMAIL }}",
+                "odoohost_password": "${{ secrets.ORG_ODOOHOST_PASSWORD }}"
+            }
+            EOF
+            )"
+
+            chcli devops project sync-review-teams-json --json "$(
+            cat << 'EOF'
+            {
+                "run_id": ${{ github.run_id }},
+                "gh_config_id": ${{ vars.ORG_ODOOHOST_GH_CONFIG_ID }},
+                "odoohost_url": "${{ vars.ORG_ODOOHOST_BASE_URL }}",
+                "odoohost_db": "${{ vars.ORG_ODOOHOST_DB }}",
+                "odoohost_email": "${{ secrets.ORG_ODOOHOST_EMAIL }}",
+                "odoohost_password": "${{ secrets.ORG_ODOOHOST_PASSWORD }}"
+            }
+            EOF
+            )"
