@@ -15,6 +15,7 @@
 #   - ENABLE_REPO_CICD_TRACK_PR_MODULES
 #   - REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES
 #   - ORG_ODOOHOST_BASE_URL
+#   - ORG_ODOOHOST_DB
 #   - ORG_ODOOHOST_GH_CONFIG_ID
 
 name: Track PR Modules
@@ -84,6 +85,7 @@ jobs:
             - variables:
               - REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES
               - ORG_ODOOHOST_BASE_URL
+              - ORG_ODOOHOST_DB
               - ORG_ODOOHOST_GH_CONFIG_ID
           EOF
 
@@ -99,6 +101,7 @@ jobs:
 
           # OdooHost
           [[ -z "${{ vars.ORG_ODOOHOST_BASE_URL }}" ]] && echo "❌ Falta ORG_ODOOHOST_BASE_URL" && exit 1
+          [[ -z "${{ vars.ORG_ODOOHOST_DB }}" ]] && echo "❌ Falta ORG_ODOOHOST_DB" && exit 1
           [[ -z "${{ secrets.ORG_ODOOHOST_EMAIL }}" ]] && echo "❌ Falta ORG_ODOOHOST_EMAIL" && exit 1
           [[ -z "${{ secrets.ORG_ODOOHOST_PASSWORD }}" ]] && echo "❌ Falta ORG_ODOOHOST_PASSWORD" && exit 1
           [[ -z "${{ vars.ORG_ODOOHOST_GH_CONFIG_ID }}" ]] && echo "❌ Falta ORG_ODOOHOST_GH_CONFIG_ID" && exit 1
@@ -126,6 +129,7 @@ jobs:
                 "repo_url": "https://github.com/${{ github.repository }}",
                 "ref": "${{ github.event.pull_request.head.sha }}",
                 "odoohost_url": "${{ vars.ORG_ODOOHOST_BASE_URL }}",
+                "odoohost_db": "${{ vars.ORG_ODOOHOST_DB }}",
                 "odoohost_email": "${{ secrets.ORG_ODOOHOST_EMAIL }}",
                 "odoohost_password": "${{ secrets.ORG_ODOOHOST_PASSWORD }}"
             }
@@ -138,6 +142,7 @@ jobs:
                 "run_id": ${{ github.run_id }},
                 "gh_config_id": ${{ vars.ORG_ODOOHOST_GH_CONFIG_ID }},
                 "odoohost_url": "${{ vars.ORG_ODOOHOST_BASE_URL }}",
+                "odoohost_db": "${{ vars.ORG_ODOOHOST_DB }}",
                 "odoohost_email": "${{ secrets.ORG_ODOOHOST_EMAIL }}",
                 "odoohost_password": "${{ secrets.ORG_ODOOHOST_PASSWORD }}"
             }
