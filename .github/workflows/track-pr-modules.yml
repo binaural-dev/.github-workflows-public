@@ -12,8 +12,6 @@
 #   - ORG_ODOOHOST_PASSWORD
 # - variables:
 #   - ENABLE_ORG_CICD_TRACK_PR_MODULES
-#   - ENABLE_REPO_CICD_TRACK_PR_MODULES
-#   - REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES
 #   - ORG_ODOOHOST_BASE_URL
 #   - ORG_ODOOHOST_DB
 #   - ORG_ODOOHOST_GH_CONFIG_ID
@@ -32,42 +30,16 @@ jobs:
     steps:
 
       - name: Action Deshabilitada por configuración
-        if: ${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES != 1 || vars.ENABLE_REPO_CICD_TRACK_PR_MODULES != 1 }}
+        if: ${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES != 1 }}
         run: |
           echo "⚠️ Las configuraciones de activación no están habilitadas:"
           echo "ENABLE_ORG_CICD_TRACK_PR_MODULES=${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES }}"
-          echo "ENABLE_REPO_CICD_TRACK_PR_MODULES=${{ vars.ENABLE_REPO_CICD_TRACK_PR_MODULES }}"
-          echo "REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES=${{ vars.REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES }}"
           echo "Saliendo sin ejecutar tracking."
           exit 0
 
       - name: Validar configuración requerida
-        id: check_required_settings
-        if: ${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES == '1' && vars.ENABLE_REPO_CICD_TRACK_PR_MODULES == '1' }}
+        if: ${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES == '1' }}
         run: |
-          echo "🔍 Validando rama destino: ${{ github.event.pull_request.base.ref }}"
-
-          ALLOWED_BRANCHES="${{ vars.REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES }}"
-          BASE_REF="${{ github.event.pull_request.base.ref }}"
-          HABILITADO=0
-          IFS=',' read -ra ALLOWED <<< "$ALLOWED_BRANCHES"
-          for branch in "${ALLOWED[@]}"; do
-            if [[ "$branch" == "$BASE_REF" ]]; then
-              HABILITADO=1
-            fi
-          done
-          echo "allow_run_next_steps=$HABILITADO" >> $GITHUB_OUTPUT
-
-          if [[ $HABILITADO -eq 0 ]]; then
-            echo "⚠️ La rama '$BASE_REF' no está permitida para este workflow."
-            echo "Saliendo sin ejecutar tracking."
-            exit 0
-          else
-            echo "✅ Rama permitida: $BASE_REF"
-          fi
-
-          # -----------------------------------
-
           echo "🔍 Validando configuración..."
 
           echo "🔧 Variables de configuración requeridas:"
@@ -83,13 +55,11 @@ jobs:
               - ORG_ODOOHOST_EMAIL
               - ORG_ODOOHOST_PASSWORD
             - variables:
-              - REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES
               - ORG_ODOOHOST_BASE_URL
               - ORG_ODOOHOST_DB
               - ORG_ODOOHOST_GH_CONFIG_ID
           EOF
 
-          [[ -z "${{ vars.REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES }}" ]] && echo "❌ Falta REPO_CICD_TRACK_PR_MODULES_TARGET_BRANCHES" && exit 1
           [[ -z "${{ secrets.ORG_CICD_TOKEN }}" ]] && echo "❌ Falta ORG_CICD_TOKEN" && exit 1
 
           # S3
@@ -109,7 +79,7 @@ jobs:
           echo "✅ Todas las variables están presentes."
 
       - name: Instalar BINCLI y escanear módulos + sincronizar review teams
-        if: ${{ steps.check_required_settings.outputs.allow_run_next_steps == '1' && vars.ENABLE_ORG_CICD_TRACK_PR_MODULES == '1' && vars.ENABLE_REPO_CICD_TRACK_PR_MODULES == '1' }}
+        if: ${{ vars.ENABLE_ORG_CICD_TRACK_PR_MODULES == '1' }}
         uses: binaural-dev/.github-workflows-public/.github/actions/install_bincli@release
         env:
           ORG_CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
