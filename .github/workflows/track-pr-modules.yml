@@ -92,29 +92,6 @@ jobs:
           BINCLI_BRANCH_OR_TAG: 'release'
           CICD_TOKEN: ${{ secrets.ORG_CICD_TOKEN }}
           cli-command: |
-            chcli devops project scan-modules-json --json "$(
-            cat << 'EOF'
-            {
-                "run_id": ${{ github.run_id }},
-                "repo_url": "https://github.com/${{ github.repository }}",
-                "ref": "${{ github.event.pull_request.head.sha }}",
-                "odoohost_url": "${{ vars.ORG_ODOOHOST_BASE_URL }}",
-                "odoohost_db": "${{ vars.ORG_ODOOHOST_DB }}",
-                "odoohost_email": "${{ secrets.ORG_ODOOHOST_EMAIL }}",
-                "odoohost_password": "${{ secrets.ORG_ODOOHOST_PASSWORD }}"
-            }
-            EOF
-            )"
+            chcli devops project scan-modules-json --json "{\"run_id\": ${{ github.run_id }}, \"repo_url\": \"https://github.com/${{ github.repository }}\", \"ref\": \"${{ github.event.pull_request.head.sha }}\", \"odoohost_url\": \"${{ vars.ORG_ODOOHOST_BASE_URL }}\", \"odoohost_db\": \"${{ vars.ORG_ODOOHOST_DB }}\", \"odoohost_email\": \"${{ secrets.ORG_ODOOHOST_EMAIL }}\", \"odoohost_password\": \"${{ secrets.ORG_ODOOHOST_PASSWORD }}\"}"
 
-            chcli devops project sync-review-teams-json --json "$(
-            cat << 'EOF'
-            {
-                "run_id": ${{ github.run_id }},
-                "gh_config_id": ${{ vars.ORG_ODOOHOST_GH_CONFIG_ID }},
-                "odoohost_url": "${{ vars.ORG_ODOOHOST_BASE_URL }}",
-                "odoohost_db": "${{ vars.ORG_ODOOHOST_DB }}",
-                "odoohost_email": "${{ secrets.ORG_ODOOHOST_EMAIL }}",
-                "odoohost_password": "${{ secrets.ORG_ODOOHOST_PASSWORD }}"
-            }
-            EOF
-            )"
+            chcli devops project sync-review-teams-json --json "{\"run_id\": ${{ github.run_id }}, \"gh_config_id\": ${{ vars.ORG_ODOOHOST_GH_CONFIG_ID }}, \"odoohost_url\": \"${{ vars.ORG_ODOOHOST_BASE_URL }}\", \"odoohost_db\": \"${{ vars.ORG_ODOOHOST_DB }}\", \"odoohost_email\": \"${{ secrets.ORG_ODOOHOST_EMAIL }}\", \"odoohost_password\": \"${{ secrets.ORG_ODOOHOST_PASSWORD }}\"}"
