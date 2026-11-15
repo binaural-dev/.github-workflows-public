@@ -21,6 +21,7 @@
 #   - REPO_CICD_CHECK_PR_TARGET_BRANCHES
 #   - REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS
 #   - ORG_ODOOHOST_BASE_URL
+#   - ORG_ODOOHOST_DB
 #   - DO_RECURSIVE (optional, default: "0") -- "1" corre el arbol completo
 #     de dependencias de los modulos modificados (--recursive de
 #     scripts/odoo-test) en vez de solo esos modulos.
@@ -98,6 +99,7 @@ jobs:
               - REPO_CICD_CHECK_PR_TARGET_BRANCHES
               - REPO_CICD_CHECK_PR_TESTS_BRANCHES_JSON_SETTINGS
               - ORG_ODOOHOST_BASE_URL
+              - ORG_ODOOHOST_DB
           EOF
 
           # 
@@ -119,6 +121,7 @@ jobs:
 
           # OdooHost
           [[ -z "${{ vars.ORG_ODOOHOST_BASE_URL }}" ]] && echo "❌ Falta ORG_ODOOHOST_BASE_URL" && exit 1
+          [[ -z "${{ vars.ORG_ODOOHOST_DB }}" ]] && echo "❌ Falta ORG_ODOOHOST_DB" && exit 1
           [[ -z "${{ secrets.ORG_ODOOHOST_EMAIL }}" ]] && echo "❌ Falta ORG_ODOOHOST_EMAIL" && exit 1
           [[ -z "${{ secrets.ORG_ODOOHOST_PASSWORD }}" ]] && echo "❌ Falta ORG_ODOOHOST_PASSWORD" && exit 1
 
@@ -138,6 +141,7 @@ jobs:
           DOCKER_REGISTRY_USERNAME: ${{ secrets.ORG_DOCKER_REGISTRY_USERNAME }}
           DOCKER_REGISTRY_PASSWORD: ${{ secrets.ORG_DOCKER_REGISTRY_PASSWORD }}
           ODOOHOST_BASE_URL: ${{ vars.ORG_ODOOHOST_BASE_URL }}
+          ODOOHOST_DB: ${{ vars.ORG_ODOOHOST_DB }}
           ODOOHOST_EMAIL: ${{ secrets.ORG_ODOOHOST_EMAIL }}
           ODOOHOST_PASSWORD: ${{ secrets.ORG_ODOOHOST_PASSWORD }}
         with:
@@ -149,6 +153,7 @@ jobs:
               --run_name '"Id: ${{ github.run_id }}"' \
               --branch_name ${{ github.event.pull_request.base.ref }} \
               --odoohost_base_url ${{ vars.ORG_ODOOHOST_BASE_URL }} \
+              --odoohost_db ${{ vars.ORG_ODOOHOST_DB }} \
               --odoohost_email ${{ secrets.ORG_ODOOHOST_EMAIL }} \
               --odoohost_password ${{ secrets.ORG_ODOOHOST_PASSWORD }} \
               --send_report_to_odoohost \
