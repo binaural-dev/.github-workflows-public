@@ -6,6 +6,7 @@
 # - variables:
 #   - PR_APPROVAL_RULES
 #     Formato: autor:aprobador,aprobador|autor:aprobador,...
+#     Las reglas se separan con '|' o con saltos de línea. Espacios y líneas vacías se ignoran.
 #     Ejemplo: pastor:jaco,david,roque|jaco:pastor,roque
 # - variables (opcional):
 #   - PR_APPROVAL_SKIP_UNLISTED
@@ -24,9 +25,15 @@
 
 name: PR Author Approval Rules
 
+# Disparadores: solo al crear el PR, al pasarlo de draft a ready, y cuando cambia un review
+# (aprobación, cambios pedidos o descarte). No se ejecuta en cada push.
+#
+# Advertencia: como el check no corre en push, los commits nuevos no tienen check propio.
+# Si el check es requerido, el PR queda esperando el check hasta que haya un review nuevo.
+# Los reviews en estado COMMENTED también disparan el job, pero no cambian el resultado.
 on:
   pull_request:
-    types: [opened, reopened, synchronize, ready_for_review]
+    types: [opened, ready_for_review]
   pull_request_review:
     types: [submitted, dismissed]
 
@@ -65,7 +72,9 @@ jobs:
           MATCHES=0
           APPROVERS=""
 
-          IFS='|' read -ra RULES <<< "$PR_APPROVAL_RULES"
+          # Acepta '|' y saltos de línea como separadores entre reglas.
+          RULES_FLAT="$(printf '%s' "$PR_APPROVAL_RULES" | tr '\n' '|')"
+          IFS='|' read -ra RULES <<< "$RULES_FLAT"
           for raw in "${RULES[@]}"; do
             rule="$(printf '%s' "$raw" | normalize)"
             if [[ -z "$rule" ]]; then
@@ -126,7 +135,6 @@ jobs:
       - name: Publicar nota y asignar aprobadores
         if: >-
           github.event_name == 'pull_request' &&
-          github.event.action != 'synchronize' &&
           github.event.pull_request.draft == false &&
           steps.rules.outputs.skip_check != 'true'
         env:
