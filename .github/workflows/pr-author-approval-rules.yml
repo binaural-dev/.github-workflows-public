@@ -7,9 +7,14 @@
 #   - PR_APPROVAL_RULES
 #     Formato: autor:aprobador,aprobador|autor:aprobador,...
 #     Ejemplo: pastor:jaco,david,roque|jaco:pastor,roque
+# - variables (opcional):
+#   - PR_APPROVAL_SKIP_UNLISTED
+#     Si es exactamente 1, los autores que no están en PR_APPROVAL_RULES no ejecutan
+#     el check y pasan. Cualquier otro valor (o no definirla) hace que fallen.
 #
 # Comportamiento:
-# - Autor sin regla: se publica una nota en el PR y el check falla.
+# - Autor sin regla: se publica una nota en el PR y el check falla
+#   (salvo que PR_APPROVAL_SKIP_UNLISTED=1, en cuyo caso se omite y pasa).
 # - Autor con regla: el check pasa solo si al menos un aprobador designado tiene
 #   su último review (ignorando COMMENTED/PENDING) en APPROVED.
 #   CHANGES_REQUESTED o DISMISSED solo anulan la aprobación de ese mismo revisor.
@@ -37,6 +42,7 @@ jobs:
 
     env:
       PR_APPROVAL_RULES: ${{ vars.PR_APPROVAL_RULES }}
+      PR_APPROVAL_SKIP_UNLISTED: ${{ vars.PR_APPROVAL_SKIP_UNLISTED }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PR_AUTHOR: ${{ github.event.pull_request.user.login }}
       REPO: ${{ github.repository }}
@@ -82,8 +88,16 @@ jobs:
           fi
 
           if [[ $MATCHES -eq 0 ]]; then
-            echo "ℹ️ El autor '$PR_AUTHOR' no tiene reglas de aprobación: el check fallará."
-            echo "has_rule=false" >> "$GITHUB_OUTPUT"
+            if [[ "$PR_APPROVAL_SKIP_UNLISTED" == "1" ]]; then
+              echo "ℹ️ El autor '$PR_AUTHOR' no está en PR_APPROVAL_RULES y PR_APPROVAL_SKIP_UNLISTED=1: se omite el check."
+              {
+                echo "has_rule=false"
+                echo "skip_check=true"
+              } >> "$GITHUB_OUTPUT"
+            else
+              echo "ℹ️ El autor '$PR_AUTHOR' no tiene reglas de aprobación: el check fallará."
+              echo "has_rule=false" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
 
@@ -113,7 +127,8 @@ jobs:
         if: >-
           github.event_name == 'pull_request' &&
           github.event.action != 'synchronize' &&
-          github.event.pull_request.draft == false
+          github.event.pull_request.draft == false &&
+          steps.rules.outputs.skip_check != 'true'
         env:
           HAS_RULE: ${{ steps.rules.outputs.has_rule }}
           APPROVERS: ${{ steps.rules.outputs.approvers }}
@@ -166,6 +181,7 @@ jobs:
           fi
 
       - name: Verificar aprobación de un aprobador designado
+        if: steps.rules.outputs.skip_check != 'true'
         env:
           HAS_RULE: ${{ steps.rules.outputs.has_rule }}
           APPROVERS: ${{ steps.rules.outputs.approvers }}
