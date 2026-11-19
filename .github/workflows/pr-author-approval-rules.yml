@@ -1,0 +1,239 @@
+# .github/workflows/pr-author-approval-rules.yml
+
+# Regla de aprobación según el autor del PR.
+#
+# Variable requerida (repo u org):
+# - variables:
+#   - PR_APPROVAL_RULES
+#     Formato: autor:aprobador,aprobador|autor:aprobador,...
+#     Las reglas se separan con '|' o con saltos de línea. Espacios y líneas vacías se ignoran.
+#     Ejemplo: pastor:jaco,david,roque|jaco:pastor,roque
+# - variables (opcional):
+#   - PR_APPROVAL_SKIP_UNLISTED
+#     Si es exactamente 1, los autores que no están en PR_APPROVAL_RULES no ejecutan
+#     el check y pasan. Cualquier otro valor (o no definirla) hace que fallen.
+#
+# Comportamiento:
+# - Autor sin regla: se publica una nota en el PR y el check falla
+#   (salvo que PR_APPROVAL_SKIP_UNLISTED=1, en cuyo caso se omite y pasa).
+# - Autor con regla: el check pasa solo si al menos un aprobador designado tiene
+#   su último review (ignorando COMMENTED/PENDING) en APPROVED.
+#   CHANGES_REQUESTED o DISMISSED solo anulan la aprobación de ese mismo revisor.
+#   Reviews de usuarios no designados no afectan el check.
+#
+# Secrets: ninguno (usa GITHUB_TOKEN).
+
+name: PR Author Approval Rules
+
+# Disparadores: solo al crear el PR, al pasarlo de draft a ready, y cuando cambia un review
+# (aprobación, cambios pedidos o descarte). No se ejecuta en cada push.
+#
+# Advertencia: como el check no corre en push, los commits nuevos no tienen check propio.
+# Si el check es requerido, el PR queda esperando el check hasta que haya un review nuevo.
+# Los reviews en estado COMMENTED también disparan el job, pero no cambian el resultado.
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  approval-rules:
+    name: approval-rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      PR_APPROVAL_RULES: ${{ vars.PR_APPROVAL_RULES }}
+      PR_APPROVAL_SKIP_UNLISTED: ${{ vars.PR_APPROVAL_SKIP_UNLISTED }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Resolver reglas para el autor del PR
+        id: rules
+        run: |
+          set -euo pipefail
+
+          normalize() { tr -d '[:space:]' | tr '[:upper:]' '[:lower:]'; }
+
+          if [[ -z "$(printf '%s' "$PR_APPROVAL_RULES" | normalize)" ]]; then
+            echo "❌ Falta la variable PR_APPROVAL_RULES."
+            exit 1
+          fi
+
+          AUTHOR="$(printf '%s' "$PR_AUTHOR" | normalize)"
+          MATCHES=0
+          APPROVERS=""
+
+          # Acepta '|' y saltos de línea como separadores entre reglas.
+          RULES_FLAT="$(printf '%s' "$PR_APPROVAL_RULES" | tr '\n' '|')"
+          IFS='|' read -ra RULES <<< "$RULES_FLAT"
+          for raw in "${RULES[@]}"; do
+            rule="$(printf '%s' "$raw" | normalize)"
+            if [[ -z "$rule" ]]; then
+              continue
+            fi
+            if [[ "$rule" != *:* ]]; then
+              echo "❌ Regla inválida (falta ':' entre autor y aprobadores): $rule"
+              exit 1
+            fi
+            rule_author="${rule%%:*}"
+            if [[ "$rule_author" == "$AUTHOR" ]]; then
+              MATCHES=$((MATCHES + 1))
+              APPROVERS="${rule#*:}"
+            fi
+          done
+
+          if [[ $MATCHES -gt 1 ]]; then
+            echo "❌ El autor '$AUTHOR' aparece en más de una regla."
+            exit 1
+          fi
+
+          if [[ $MATCHES -eq 0 ]]; then
+            if [[ "$PR_APPROVAL_SKIP_UNLISTED" == "1" ]]; then
+              echo "ℹ️ El autor '$PR_AUTHOR' no está en PR_APPROVAL_RULES y PR_APPROVAL_SKIP_UNLISTED=1: se omite el check."
+              {
+                echo "has_rule=false"
+                echo "skip_check=true"
+              } >> "$GITHUB_OUTPUT"
+            else
+              echo "ℹ️ El autor '$PR_AUTHOR' no tiene reglas de aprobación: el check fallará."
+              echo "has_rule=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          CLEAN=()
+          IFS=',' read -ra LIST <<< "$APPROVERS"
+          for a in "${LIST[@]}"; do
+            if [[ -n "$a" ]]; then
+              CLEAN+=("$a")
+            fi
+          done
+          if [[ ${#CLEAN[@]} -eq 0 ]]; then
+            echo "❌ La regla de '$AUTHOR' no tiene aprobadores."
+            exit 1
+          fi
+
+          APPROVERS_CSV="$(IFS=','; echo "${CLEAN[*]}")"
+
+          {
+            echo "has_rule=true"
+            echo "approvers=$APPROVERS_CSV"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "✅ Autor: $AUTHOR"
+          echo "✅ Aprobadores designados: $APPROVERS_CSV"
+
+      - name: Publicar nota y asignar aprobadores
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.draft == false &&
+          steps.rules.outputs.skip_check != 'true'
+        env:
+          HAS_RULE: ${{ steps.rules.outputs.has_rule }}
+          APPROVERS: ${{ steps.rules.outputs.approvers }}
+        run: |
+          set -euo pipefail
+
+          EXISTING_ID="$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.body | contains("<!-- pr-author-approval-rules -->")) | .id' \
+            | sed -n '1p')"
+
+          if [[ -n "$EXISTING_ID" ]]; then
+            echo "ℹ️ Ya existe el comentario de reglas en el PR; no se publica otro."
+          else
+            BODY_FILE="$(mktemp)"
+            {
+              echo "<!-- pr-author-approval-rules -->"
+              if [[ "$HAS_RULE" == "true" ]]; then
+                echo "### 🔐 Aprobación requerida"
+                echo ""
+                echo "Autor del PR: $PR_AUTHOR"
+                echo ""
+                echo "Este PR requiere la aprobación de **al menos uno** de los siguientes aprobadores:"
+                echo ""
+                IFS=',' read -ra LIST <<< "$APPROVERS"
+                for a in "${LIST[@]}"; do
+                  echo "- @$a"
+                done
+                echo ""
+                echo "El check **approval-rules** fallará hasta que uno de ellos apruebe el PR."
+              else
+                echo "### ⚠️ Autor sin reglas de aprobación"
+                echo ""
+                echo "El autor del PR ($PR_AUTHOR) no tiene reglas en la variable PR_APPROVAL_RULES."
+                echo ""
+                echo "El check **approval-rules** fallará hasta que el autor sea agregado a la configuración."
+              fi
+            } > "$BODY_FILE"
+
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$BODY_FILE"
+          fi
+
+          if [[ "$HAS_RULE" == "true" ]]; then
+            IFS=',' read -ra LIST <<< "$APPROVERS"
+            for a in "${LIST[@]}"; do
+              if ! gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers" \
+                  -f "reviewers[]=$a" >/dev/null; then
+                echo "::warning::No se pudo asignar '$a' como reviewer (¿es colaborador del repo?)."
+              fi
+            done
+          fi
+
+      - name: Verificar aprobación de un aprobador designado
+        if: steps.rules.outputs.skip_check != 'true'
+        env:
+          HAS_RULE: ${{ steps.rules.outputs.has_rule }}
+          APPROVERS: ${{ steps.rules.outputs.approvers }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$HAS_RULE" != "true" ]]; then
+            echo "❌ El autor '$PR_AUTHOR' no tiene reglas de aprobación configuradas."
+            exit 1
+          fi
+
+          # Último review de cada revisor, ignorando COMMENTED y PENDING.
+          # Solo importa si el revisor es designado: su último estado debe ser APPROVED.
+          # CHANGES_REQUESTED o DISMISSED de un designado anulan solo su propia aprobación.
+          # Reviews de usuarios no designados no afectan el resultado.
+          LATEST_APPROVERS="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/reviews" \
+            --jq '.[] | {user: (.user.login // ""), state: .state, at: .submitted_at}' \
+            | jq -rs '
+                map(select(.user != "" and .state != "COMMENTED" and .state != "PENDING"))
+                | group_by(.user | ascii_downcase)
+                | map(max_by(.at))
+                | .[]
+                | select(.state == "APPROVED")
+                | .user | ascii_downcase
+              ')"
+
+          FOUND=""
+          IFS=',' read -ra LIST <<< "$APPROVERS"
+          while IFS= read -r user; do
+            if [[ -z "$user" ]]; then
+              continue
+            fi
+            for a in "${LIST[@]}"; do
+              if [[ "$user" == "$a" ]]; then
+                FOUND="$user"
+                break 2
+              fi
+            done
+          done <<< "$LATEST_APPROVERS"
+
+          if [[ -n "$FOUND" ]]; then
+            echo "✅ '$FOUND' es aprobador designado para '$PR_AUTHOR' y ya aprobó el PR."
+            exit 0
+          fi
+
+          echo "❌ Falta la aprobación de al menos uno de los aprobadores designados para '$PR_AUTHOR': $APPROVERS"
+          exit 1
